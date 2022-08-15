@@ -1,0 +1,509 @@
+#!/bin/bash
+
+# set -euxo pipefail  # For debugging this script
+set -uo pipefail  # For release
+
+# Reasoning: Accepting that it's a Really Bad Idea (Trump-case used for emphasis) to 
+# create any kind of backup or kkk of a validator for the sake of being able to 
+# bring up a stack when one dies (because slashing), We've created tools that try to
+# make it exceedingly easy and safe to replace an existing server with a new one.
+# We want this to be
+# a well-worn path that always just works, with a minimum of fuss. As with any kind of backup
+# strategy, if you don't rehearse the "restore" half of the process frequently,
+# bit rot (the entropic tendency of all systems to move toward disorder) all but guarantees
+# that it will fail just when you need it the most.
+# A full rehearsal can be done here with just a single command: "make redploy-from-scratch". That target
+# does it all: bring down gracefully, clean, configure, build, run, test, go-live.
+#
+# Just to say: Using Docker is a great choice for doing this. Well played, my fellow
+# eth-dockerians.
+
+# Terminology: Note that the scope of the term "rebuild" in our context encompasses not just
+# code rebuilding, but also the creation and bringing-up of containers. This is in the
+# spririt of provisioning systems like Terraform, wherein...
+
+# Model: Targets that build/install/etc are idempotent and fast if nothing needs to be done.
+
+# Consider having a quick.make file that turns itself into a "Makefile", if you decide to use it
+
+# GOOD IDEA: Just make these bash functions
+
+## Open documentation
+open-docs()
+{
+    open https://eth-docker.net/docs/Usage/ClientSetup
+}
+
+
+# #-------------------------------------------------------------------------------------
+# # Top level
+# #-------------------------------------------------------------------------------------
+
+## Stop containers
+stop()
+{
+    container-stop
+}
+
+## Start containers
+start()
+{
+    container-start
+}
+
+## Restart containers
+restart()
+{
+    container-restart
+}
+
+## First deploy
+deploy()
+{
+    deploy-from-scratch
+}
+
+
+# #-------------------------------------------------------------------------------------
+# # Platform setup
+# #-------------------------------------------------------------------------------------
+
+# # Choose or auto-detect your platform and record somewhere so that platform-dependent
+# # targets can use it.
+
+
+# #-------------------------------------------------------------------------------------
+# # Development environment setup
+# #-------------------------------------------------------------------------------------
+
+# # To check that xcode tools are installed: https://mac.install.guide/commandlinetools/2.html
+
+# # TODO: Have install step auto-detect the platform
+
+#- Install tools needed to build everything
+tools-build()
+{
+	tools-build-mac
+}
+
+#- Install tools needed to build everything
+tools-clean()
+{
+	tools-clean-mac
+}
+
+#- Re-build tools needed to build everything
+tools-rebuild()
+{
+	tools-clean
+	tools-build
+}
+
+#- Set up Mac dev environment
+tools-build-mac()
+{
+    # Install Apple XCode command line tools
+    if xcode-is-installed
+    then
+        echo Mac Xcode command line tools are already installed
+    else
+        echo Installing Mac Xcode command line tools
+        xcode-select --install
+    fi
+
+    # Install Homebrew package manager
+    # See: https://brew.sh/
+	if homebrew-is-installed
+    then
+        echo Homebrew package manager is already installed
+    else
+        echo Installing Homebrew package manager
+		/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+	fi
+
+    # Install GNU Coreutils
+    # See: https://www.gnu.org/software/coreutils/
+    homebrew-package-check-install coreutils
+
+    # Install newt
+    # See: https://pagure.io/newt
+    homebrew-package-check-install newt
+}
+
+xcode-is-installed()
+{
+    xcode-select --print-path 1>/dev/null
+}
+
+homebrew-is-installed()
+{
+    command -v brew &> /dev/null
+}
+
+homebrew-package-is-installed()
+{
+    brew list $1 &>/dev/null
+}
+
+homebrew-package-check-install()
+{
+    if homebrew-package-is-installed $1
+    then
+        echo $1 package is already installed
+    else
+        echo Installing $1
+	    brew install $1
+    fi
+}
+
+homebrew-package-check-uninstall()
+{
+    if homebrew-package-is-installed $1
+    then
+        echo Uninstalling $1
+	    brew uninstall $1
+    else
+        echo $1 package is already uninstalled
+    fi
+}
+
+#- Set up Windows dev environment
+tools-build-win()
+{
+	@echo Not yet implemented. Volunteers?
+}
+
+#- Set up Clear Linux dev environment
+tools-build-clear-linux()
+{
+	@echo Not yet implemented. Volunteers?
+}
+
+#- Uninstall Mac dev env
+tools-clean-mac()
+{
+    homebrew-package-check-uninstall newt
+    homebrew-package-check-uninstall coreutils
+    # TODO: Decide whether we really do want to remove Homebrew and Xcode completely
+}
+
+#- Uninstall Windows dev env
+tools-clean-win()
+{
+	@echo Not yet implemented. Volunteers?
+}
+
+#- Uninstall Clear Linux dev environment
+tools-clean-clear-linux()
+{
+	@echo Not yet implemented. Volunteers?
+}
+
+
+# #-------------------------------------------------------------------------------------
+# # Configuration
+# #-------------------------------------------------------------------------------------
+
+config-build-interactive()
+{
+    if git-has-uncommitted-changes
+    then
+        echo You have uncommitted changes in Git. We need to switch branches, so you\'ll need to commit those first
+        exit
+    fi
+	DOCKER_BUILDKIT=0 COMPOSE_DOCKER_CLI_BUILD=0 ./ethd config
+	./ethd update
+}
+
+config-build()
+{
+    cp env-trent .env
+}
+
+#- Clean configuration
+config-clean()
+{
+    echo 
+	rm -f .env*
+}
+
+#- Rebuild configuration
+config-rebuild()
+{
+	config-clean
+	config-build
+}
+
+git-has-uncommitted-changes()
+{
+    [[ -n $(git status -s) ]]
+}
+
+
+# #-------------------------------------------------------------------------------------
+# # Image
+# #-------------------------------------------------------------------------------------
+
+#- Build image
+# TODO: Try to get rid of the "--pull" option here
+image-build()
+{
+	docker-compose build --pull
+}
+
+#- Build image without using cached layers
+# TODO: Try to get rid of the "--pull" option here
+image-build-no-cache()
+{
+	docker-compose build --pull --no-cache 
+}
+
+#- Delete image
+image-clean()
+{
+	docker-compose down --rmi all
+    # docker rmi vc-utils:local besu:merge teku:merge
+}
+
+#- Rebuild image
+image-rebuild()
+{
+	image-clean
+	image-build
+}
+
+#- Rebuild image without using layer caches
+image-rebuild-no-cache()
+{
+	image-clean
+	image-build-no-cache
+}
+
+## Prune orphan images
+image-prune()
+{
+	docker images
+    docker image prune
+    docker images
+}
+
+## List all eth-docker images
+image-list()
+{
+	docker-compose images
+}
+
+#- List layers in image
+image-list-layers()
+{
+	@docker history ${IMAGE_NAME}:${PROJECT_VERSION}
+}
+
+#- List layers in image without truncating command lines
+image-list-layers-full()
+{
+	@docker history --no-trunc ${IMAGE_NAME}:${PROJECT_VERSION}
+}
+
+
+# #-------------------------------------------------------------------------------------
+# # Containers
+# #-------------------------------------------------------------------------------------
+
+#- Create containers from images
+container-build()
+{
+	docker-compose create --no-build --no-recreate
+}
+
+#- Delete containers
+# TODO: Not all containers are removed: teku:local and besu:local
+container-clean()
+{
+	container-stop
+	docker-compose rm
+}
+
+#- Rebuild container
+container-rebuild()
+{
+	container-clean
+	container-build
+}
+
+#- Start existing containers
+container-start()
+{
+	docker compose start
+}
+
+#- Stop containers
+container-stop()
+{
+	docker compose stop
+}
+
+#- Restart containers
+container-restart()
+{
+	docker compose restart
+}
+
+## Show container logs
+container-logs()
+{
+	docker compose log --follow --tail 100
+}
+
+## Check health of container and its processes
+container-health()
+{
+	@printf "Container health check: " && docker inspect ${CONTAINER_NAME} | jq '.[].State.Health.Status'
+}
+
+#- Print port numbers exposed by container
+container-port()
+{
+	@docker port ${CONTAINER_NAME}
+}
+
+## Prune orphan containers
+container-prune()
+{
+	@docker ps -a && docker container prune && docker ps -a 
+}
+
+
+# #-------------------------------------------------------------------------------------
+# # Deployment
+# #-------------------------------------------------------------------------------------
+
+#- First time deploy from fresh OS
+deploy-from-scratch()  
+{
+	tools-build
+	config-build
+	image-build-no-cache
+	container-build
+	container-start
+}
+
+##- Clean and rebuild from fresh OS
+redeploy-from-scratch()  
+{
+	container-stop
+	container-clean
+	image-clean
+	config-clean
+	tools-clean
+	tools-build
+	config-build
+	image-build-no-cache
+	container-build
+	container-start
+}
+
+#- Clean and rebuild from tools step
+redeploy-from-tools()  
+{
+	container-stop
+	container-clean
+	image-clean
+	config-clean
+	config-build
+	image-build-no-cache
+	container-build
+	container-start
+}
+
+#- Clean and rebuild from config step
+redeploy-from-config()  
+{
+	container-stop
+	container-clean
+	image-clean
+	image-build-no-cache
+	container-build
+	container-start
+}
+
+#- Clean and rebuild from image step
+redeploy-from-image()
+{
+	container-stop
+	container-clean
+	container-build
+	container-start
+}
+
+#- Clean and rebuild from image step
+redeploy-from-image-no-cache()
+{
+	container-stop
+	container-clean
+	container-build-no-cache
+	container-start
+}
+
+#- Clean and rebuild from container step
+redeploy-from-container()
+{
+	container-stop
+	container-start
+}
+
+
+#-------------------------------------------------------------------------------------
+# Usage
+#-------------------------------------------------------------------------------------
+
+printhelp() {
+    me=$(basename "${BASH_SOURCE}")
+    echo "usage: ${me} [help|-h|--help] <subcommand>"
+    echo ""
+    echo "optional arguments:"
+    echo "  help | -h | --help"
+    echo "    print this message and exit"
+    echo ""
+    echo "subcommands:"
+    echo "  config "
+    echo "     configures eth-docker with your choice of Ethereum clients"
+}
+
+if [[ "$#" -eq 0 || "$1" == "help" || "$1" == "-h" || "$1" == "--help" ]]; then
+    printhelp
+fi
+
+
+#-------------------------------------------------------------------------------------
+# Helpers
+#-------------------------------------------------------------------------------------
+
+
+#-------------------------------------------------------------------------------------
+# Usage
+#-------------------------------------------------------------------------------------
+
+## Print Makefile usage for standard targets.
+# 	@grep -h -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | sort | awk 'BEGIN {FS = ":.*?## "}; {printf "\033[36m%-30s\033[0m %s\n", $$1, $$2}'
+usage()
+{
+	grep -h -E '^## .*$$' ./easy | sort | awk 'BEGIN {FS = "## "}; {printf "\033[36m%-30s\033[0m %s\n", $$1, $$2}'
+}
+
+## Print Makefile usage for internal targets.
+# 	@grep -h -E '^[a-zA-Z_-]+:.*?#- .*$$' $(MAKEFILE_LIST) | sort | awk 'BEGIN {FS = ":.*?#- "}; {printf "\033[36m%-30s\033[0m %s\n", $$1, $$2}'
+usage-internal()
+{
+	grep -h -E '^#- .*$$' ./easy | sort | awk 'BEGIN {FS = "#- "}; {printf "\033[36m%-30s\033[0m %s\n", $$1, $$2}'
+}
+
+
+#-------------------------------------------------------------------------------------
+# Wrapper
+#-------------------------------------------------------------------------------------
+
+command="$1"
+shift
+
+"$command" $@
