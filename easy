@@ -327,15 +327,9 @@ git-has-uncommitted-changes()
 #-------------------------------------------------------------------------------------
 
 #- Build image
-# TODO: Try to get rid of the "--pull" option here
 images-build()
 {
-	docker-compose --project-name ethd build --pull
-}
-
-test()
-{
-	confirm-or-exit "WARNING - this action will destroy data stores. Do you wish to continue? (No/Yes) "
+	docker-compose build --pull
 }
 
 #- Delete image
@@ -344,6 +338,8 @@ images-clean()
 	# TODO: DOES THIS BELONG HERE?
 	# networks-clean
 
+	# Interestingly, this will delete project images even if containers have not yet been created from them
+	# whereas "docker-compose images" will not list the images until containers have been created.
 	docker-compose down --rmi all
 
 	# if ${LAYERS}
@@ -369,7 +365,9 @@ images-prune()
 ## List all eth-docker images
 images-list()
 {
-	docker-compose images
+	# We use "docker image ls" with a filter here because "docker-compose images" will only list our
+	# images after we've created containers for them, and we may not have done so yet.
+	docker image ls "ethd/*" 
 }
 
 #- List layers in image
@@ -406,7 +404,7 @@ containers-clean()
 	# Make sure no containers are running. We can't delete them, if they aren't
 	instances-clean
 
-	docker-compose rm
+	docker-compose rm --force
 
 	# if ${NETWORKS}
 	# then
@@ -672,6 +670,11 @@ query()
 	# Pass query string, accept, reject strings. Return boolean
 	# Default the accept reject strings?
 	echo Not yet implemented
+}
+
+test()
+{
+	confirm-or-exit "WARNING - this action will destroy data stores. Do you wish to continue? (No/Yes) "
 }
 
 
