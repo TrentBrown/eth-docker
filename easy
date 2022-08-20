@@ -217,7 +217,14 @@ tools-build-win()
 #- Set up Clear Linux dev environment
 tools-build-clear-linux()
 {
-	@echo Not yet implemented. Volunteers?
+	sudo swupd update
+	sudo swupd bundle-add containers-basic
+	sudo swupd bundle-add docker-compose
+	sudo systemctl enable docker
+	sudo systemctl start docker
+
+	# TODO: Need to change storage driver for prod?
+	# See: https://docs.01.org/clearlinux/latest/tutorials/docker.html
 }
 
 #- Uninstall Mac dev env
@@ -275,6 +282,11 @@ config-rebuild()
 	config-build
 }
 
+config-show()
+{
+	less .env
+}
+
 config-create-keys()
 {
     sudo docker-compose run --rm deposit-cli-new --eth1_withdrawal_address YOURHARDWAREWALLETADDRESS --uid $(id -u)
@@ -318,7 +330,7 @@ git-has-uncommitted-changes()
 # TODO: Try to get rid of the "--pull" option here
 images-build()
 {
-	docker-compose build --pull
+	docker-compose --project-name ethd build --pull
 }
 
 test()
@@ -330,7 +342,7 @@ test()
 images-clean()
 {
 	# TODO: DOES THIS BELONG HERE?
-	networks-clean
+	# networks-clean
 
 	docker-compose down --rmi all
 
@@ -396,15 +408,15 @@ containers-clean()
 
 	docker-compose rm
 
-	if ${NETWORKS}
-	then
-		networks-clean
-	fi
+	# if ${NETWORKS}
+	# then
+	# 	networks-clean
+	# fi
 
-	if ${VOLUMES}
-	then
-		volumes-clean
-	fi
+	# if ${VOLUMES}
+	# then
+	# 	volumes-clean
+	# fi
 }
 
 #- Rebuild container
@@ -683,7 +695,7 @@ usage-internal()
 
 
 #-------------------------------------------------------------------------------------
-# Wrapper
+# Execution wrapper
 #-------------------------------------------------------------------------------------
 
 command="$1"
