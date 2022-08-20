@@ -7,6 +7,8 @@ set -uo pipefail  # For release
 # create any kind of backup or kkk of a validator for the sake of being able to 
 # bring up a stack when one dies (because slashing), We've created tools that try to
 # make it exceedingly easy and safe to replace an existing server with a new one.
+# At no time will there be two instances of a stack. If you want to switch components,
+# you tear down the old one and build the new one, keeping any portable data (ie. the chain db).
 # We want this to be
 # a well-worn path that always just works, with a minimum of fuss. As with any kind of backup
 # strategy, if you don't rehearse the "restore" half of the process frequently,
@@ -21,12 +23,50 @@ set -uo pipefail  # For release
 # Terminology: Note that the scope of the term "rebuild" in our context encompasses not just
 # code rebuilding, but also the creation and bringing-up of containers. This is in the
 # spririt of provisioning systems like Terraform, wherein...
+# Instance == running container. Artiface, but a helpful abstraction.
 
-# Model: Targets that build/install/etc are idempotent and fast if nothing needs to be done.
+# Model: Targets that build targets are idempotent --and fast if nothing needs to be done.
 
-# Consider having a quick.make file that turns itself into a "Makefile", if you decide to use it
+# TODO: Add functions to handle deposits to both mainnet and testnet. Add admonishiments about
+# saving secrets and links to doc pages like:
+#     https://eth-docker.net/docs/Support/Recommendations/
 
-# GOOD IDEA: Just make these bash functions
+# TODO: Consider using that same terminal-GUI thing that the ethd file uses for setup.
+# Is that really better than purely CLI? I suppose so. For a multi-step workflow like
+# key setup? Can you go back? I don't think so.
+
+# TODO: Look again at how to delete cached command layers without building:
+#    docker images --no-trunc --format '{{.ID}}' | xargs docker rmi
+# AH! Looks like this might be the ticket:
+#    docker builder prune
+# of
+#    docker builder prune -af
+#
+# TODO: Consider building a terminal-based window thing (name?) to use like iTerm solution. Instead of?
+# 
+# TODO: Add a warning function that can call with all other top-level functions that pesters the user
+# to do things like deleting secrets when no longer needed. Call it "pester" "gentle-reminder" or something.
+# Or maybe generalize to be "before-run" and "after-run-hook"
+# 
+# TODO: Figure out how specify mainnet/production vs testnet (which chain?) Extra strong warnings for mainnet?
+#
+# TODO: Change to this form:
+#
+# if cond then
+#	do something
+# fi
+#
+# if cond then
+#	do something
+# else
+#	do something else
+# fi
+#
+# TODO: Consider not allowing the force param to suppress confirmation dialog when dealing with volumes and the 
+# beacon chain data. "You're using the 'force' param, but this is too important not to ask: Are you SURE you 
+# want to delete your beacon chain data? It can take weeks to restore it". " Last chance. Are you really, REALLY sure you want
+# to delete your beacon chain data? Don't say I didn't warn you."
+
 
 ## Open documentation
 open-docs()
@@ -35,50 +75,51 @@ open-docs()
 }
 
 
-# #-------------------------------------------------------------------------------------
-# # Top level
-# #-------------------------------------------------------------------------------------
-
-## Stop containers
-stop()
-{
-    container-stop
-}
+#-------------------------------------------------------------------------------------
+# Shortcuts
+# TODO: Think about whether these are really useful, or not
+#-------------------------------------------------------------------------------------
 
 ## Start containers
 start()
 {
-    container-start
+    instances-build
+}
+
+## Stop containers
+stop()
+{
+    instances-clean
 }
 
 ## Restart containers
 restart()
 {
-    container-restart
+    instances-rebuild
 }
 
-## First deploy
-deploy()
+# Show all persistent data like volumes, build layer caches, config files
+data-store-summary()
 {
-    deploy-from-scratch
+	echo tbd
 }
 
 
-# #-------------------------------------------------------------------------------------
-# # Platform setup
-# #-------------------------------------------------------------------------------------
+#-------------------------------------------------------------------------------------
+# Platform
+#-------------------------------------------------------------------------------------
 
-# # Choose or auto-detect your platform and record somewhere so that platform-dependent
-# # targets can use it.
+# Choose or auto-detect your platform and record somewhere so that platform-dependent
+# targets can use it.
 
 
-# #-------------------------------------------------------------------------------------
-# # Development environment setup
-# #-------------------------------------------------------------------------------------
+#-------------------------------------------------------------------------------------
+# Development environment setup
+#-------------------------------------------------------------------------------------
 
-# # To check that xcode tools are installed: https://mac.install.guide/commandlinetools/2.html
+# To check that xcode tools are installed: https://mac.install.guide/commandlinetools/2.html
 
-# # TODO: Have install step auto-detect the platform
+# TODO: Have install step auto-detect the platform
 
 #- Install tools needed to build everything
 tools-build()
@@ -182,27 +223,30 @@ tools-build-clear-linux()
 #- Uninstall Mac dev env
 tools-clean-mac()
 {
+	# TODO: Check flag for expunging. Default should be *not* to expunge, because folks may already have
+	# these tools and may have dependencies on them
+
     homebrew-package-check-uninstall newt
     homebrew-package-check-uninstall coreutils
-    # TODO: Decide whether we really do want to remove Homebrew and Xcode completely
+    # TODO: Decide whether we really do want to remove Homebrew and Xcode completely. Or the others, for that matter
 }
 
 #- Uninstall Windows dev env
 tools-clean-win()
 {
-	@echo Not yet implemented. Volunteers?
+	echo Not yet implemented. Volunteers?
 }
 
 #- Uninstall Clear Linux dev environment
 tools-clean-clear-linux()
 {
-	@echo Not yet implemented. Volunteers?
+	echo Not yet implemented. Volunteers?
 }
 
 
-# #-------------------------------------------------------------------------------------
-# # Configuration
-# #-------------------------------------------------------------------------------------
+#-------------------------------------------------------------------------------------
+# Configuration
+#-------------------------------------------------------------------------------------
 
 config-build-interactive()
 {
@@ -220,18 +264,44 @@ config-build()
     cp env-trent .env
 }
 
-#- Clean configuration
 config-clean()
 {
-    echo 
 	rm -f .env*
 }
 
-#- Rebuild configuration
 config-rebuild()
 {
 	config-clean
 	config-build
+}
+
+config-create-keys()
+{
+    sudo docker-compose run --rm deposit-cli-new --eth1_withdrawal_address YOURHARDWAREWALLETADDRESS --uid $(id -u)
+}
+
+# See: https://eth-docker.net/docs/Usage/ConfigureWallet
+config-check-keys()
+{
+    sudo docker-compose run --rm deposit-cli-existing --folder seed_check --eth1_withdrawal_address YOURHARDWAREWALLETADDRESS --uid $(id -u)
+    diff -s .eth/validator_keys/deposit_data*.json .eth/seed_check/deposit_data*.json
+    rm .eth/seed_check/*
+}
+
+# See: https://eth-docker.net/docs/Usage/ImportKeys
+config-import-keys()
+{
+	echo Not yet implemented
+}
+
+config-firewall-clear-linux()
+# TODO:
+#   execution client: 30303 tcp/udp, forwarded to your server
+#   lighthouse: 9000 tcp/udp, forwarded to your server
+#   prysm: 13000 tcp and 12000 udp, forwarded to your server
+#   grafana/web UI: 443 tcp, forwarded to your server, assuming you are using the reverse proxy.
+{
+	echo Not yet implemented
 }
 
 git-has-uncommitted-changes()
@@ -240,216 +310,311 @@ git-has-uncommitted-changes()
 }
 
 
-# #-------------------------------------------------------------------------------------
-# # Image
-# #-------------------------------------------------------------------------------------
+#-------------------------------------------------------------------------------------
+# Image
+#-------------------------------------------------------------------------------------
 
 #- Build image
 # TODO: Try to get rid of the "--pull" option here
-image-build()
+images-build()
 {
 	docker-compose build --pull
 }
 
-#- Build image without using cached layers
-# TODO: Try to get rid of the "--pull" option here
-image-build-no-cache()
+test()
 {
-	docker-compose build --pull --no-cache 
+	confirm-or-exit "WARNING - this action will destroy data stores. Do you wish to continue? (No/Yes) "
 }
 
 #- Delete image
-image-clean()
+images-clean()
 {
+	# TODO: DOES THIS BELONG HERE?
+	networks-clean
+
 	docker-compose down --rmi all
-    # docker rmi vc-utils:local besu:merge teku:merge
+
+	# if ${LAYERS}
+	# then
+	# 	layers-clean
+	# fi
 }
 
 #- Rebuild image
-image-rebuild()
+images-rebuild()
 {
-	image-clean
-	image-build
-}
-
-#- Rebuild image without using layer caches
-image-rebuild-no-cache()
-{
-	image-clean
-	image-build-no-cache
+	images-clean
+	images-build
 }
 
 ## Prune orphan images
-image-prune()
+# TODO: Limit to project?
+images-prune()
 {
-	docker images
     docker image prune
-    docker images
 }
 
 ## List all eth-docker images
-image-list()
+images-list()
 {
 	docker-compose images
 }
 
 #- List layers in image
-image-list-layers()
+images-list-layers()
 {
 	@docker history ${IMAGE_NAME}:${PROJECT_VERSION}
 }
 
 #- List layers in image without truncating command lines
-image-list-layers-full()
+images-list-layers-full()
 {
 	@docker history --no-trunc ${IMAGE_NAME}:${PROJECT_VERSION}
 }
 
 
-# #-------------------------------------------------------------------------------------
-# # Containers
-# #-------------------------------------------------------------------------------------
+#-------------------------------------------------------------------------------------
+# Containers
+#
+# (Not running)
+#-------------------------------------------------------------------------------------
 
 #- Create containers from images
-container-build()
+# TODO: Why does this build pull a bunch of other images? I want to have all the images
+# in place by the time we get here. The "images-build" function should do this.
+containers-build()
 {
 	docker-compose create --no-build --no-recreate
 }
 
 #- Delete containers
 # TODO: Not all containers are removed: teku:local and besu:local
-container-clean()
+containers-clean()
 {
-	container-stop
+	# Make sure no containers are running. We can't delete them, if they aren't
+	instances-clean
+
 	docker-compose rm
+
+	if ${NETWORKS}
+	then
+		networks-clean
+	fi
+
+	if ${VOLUMES}
+	then
+		volumes-clean
+	fi
 }
 
 #- Rebuild container
-container-rebuild()
+containers-rebuild()
 {
-	container-clean
-	container-build
+	containers-clean
+	containers-build
 }
 
-#- Start existing containers
-container-start()
+containers-list()
+{
+    docker compose ps \
+		--status=created \
+		--status=exited \
+		--status=removing \
+		--status=dead
+}
+
+## Prune orphan/unreferenced containers
+# TODO: Limit to project?
+containers-prune()
+{
+	docker container prune
+}
+
+
+#-------------------------------------------------------------------------------------
+# Instances
+#
+# (Running containers)
+#-------------------------------------------------------------------------------------
+
+#- Start container instances
+instances-build()
 {
 	docker compose start
 }
 
-#- Stop containers
-container-stop()
+#- Stop container instances
+instances-clean()
 {
 	docker compose stop
 }
 
-#- Restart containers
-container-restart()
+#- Restart container instances
+instances-rebuild()
 {
 	docker compose restart
 }
 
-## Show container logs
-container-logs()
+#- List container instances
+instances-list()
 {
-	docker compose log --follow --tail 100
+    docker compose ps \
+		--status=running \
+		--status=restarting \
+		--status=paused
+}
+
+## Show container instances logs
+instances-logs()
+{
+	docker compose logs --follow --tail 100
 }
 
 ## Check health of container and its processes
-container-health()
+instances-health()
 {
 	@printf "Container health check: " && docker inspect ${CONTAINER_NAME} | jq '.[].State.Health.Status'
 }
 
-#- Print port numbers exposed by container
-container-port()
+
+#-------------------------------------------------------------------------------------
+# Volumes
+#-------------------------------------------------------------------------------------
+
+# TODO: There is no "docker compose volume ls" to limit to volumes related to a project.
+# We need to use the "--filter" parameter of "docker volume ls" to accomplish this.
+# See: https://docs.docker.com/engine/reference/commandline/volume_ls/#filtering
+volumes-list()
 {
-	@docker port ${CONTAINER_NAME}
+	docker volume ls
 }
 
-## Prune orphan containers
-container-prune()
+volumes-prune()
 {
-	@docker ps -a && docker container prune && docker ps -a 
+	docker volume prune
 }
 
 
-# #-------------------------------------------------------------------------------------
-# # Deployment
-# #-------------------------------------------------------------------------------------
+#-------------------------------------------------------------------------------------
+# Networks
+#-------------------------------------------------------------------------------------
 
-#- First time deploy from fresh OS
-deploy-from-scratch()  
+# TODO: There is no "docker compose network ls" to limit to networks related to a project.
+# We need to use the "--filter" parameter of "docker network ls" to accomplish this.
+# See: https://docs.docker.com/engine/reference/commandline/network_ls/#filtering
+networks-list()
+{
+	docker network ls
+}
+
+networks-prune()
+{
+	docker network prune
+}
+
+
+#-------------------------------------------------------------------------------------
+# Deployment
+#-------------------------------------------------------------------------------------
+
+build-from-scratch()
 {
 	tools-build
 	config-build
-	image-build-no-cache
-	container-build
-	container-start
+	images-build
+	containers-build
+	instances-build
 }
 
-##- Clean and rebuild from fresh OS
-redeploy-from-scratch()  
+clean-to-scratch()
 {
-	container-stop
-	container-clean
-	image-clean
+	instances-clean
+	containers-clean
+	images-clean
 	config-clean
 	tools-clean
-	tools-build
-	config-build
-	image-build-no-cache
-	container-build
-	container-start
 }
 
-#- Clean and rebuild from tools step
-redeploy-from-tools()  
+rebuild-from-scratch()  
 {
-	container-stop
-	container-clean
-	image-clean
+	clean-to-scratch
+	build-from-scratch
+}
+
+build-from-tools()
+{
+	config-build
+	images-build
+	containers-build
+	instances-build
+}
+
+clean-to-tools()
+{
+	instances-clean
+	containers-clean
+	images-clean
 	config-clean
-	config-build
-	image-build-no-cache
-	container-build
-	container-start
 }
 
-#- Clean and rebuild from config step
-redeploy-from-config()  
+rebuild-from-tools()  
 {
-	container-stop
-	container-clean
-	image-clean
-	image-build-no-cache
-	container-build
-	container-start
+	clean-to-tools
+	build-from-tools
 }
 
-#- Clean and rebuild from image step
-redeploy-from-image()
+build-from-config()
 {
-	container-stop
-	container-clean
-	container-build
-	container-start
+	images-build
+	containers-build
+	instances-build
 }
 
-#- Clean and rebuild from image step
-redeploy-from-image-no-cache()
+clean-to-config()
 {
-	container-stop
-	container-clean
-	container-build-no-cache
-	container-start
+	instances-clean
+	containers-clean
+	images-clean
 }
 
-#- Clean and rebuild from container step
-redeploy-from-container()
+rebuild-from-config()  
 {
-	container-stop
-	container-start
+	clean-to-config
+	build-from-config
+}
+
+build-from-images()
+{
+	containers-build
+	instances-build
+}
+
+clean-to-images()
+{
+	instances-clean
+	containers-clean
+}
+
+rebuild-from-images()  
+{
+	clean-to-images
+	build-from-images
+}
+
+build-from-containers()
+{
+	instances-build
+}
+
+clean-to-containers()
+{
+	instances-clean
+}
+
+rebuild-from-containers()  
+{
+	clean-to-containers
+	build-from-containers
 }
 
 
@@ -478,6 +643,24 @@ fi
 #-------------------------------------------------------------------------------------
 # Helpers
 #-------------------------------------------------------------------------------------
+
+confirm-or-exit()
+{
+	while true; do
+        read -rp "$1" yn
+        case $yn in
+            [Yy]es ) break;;
+            * ) echo "Aborting, no changes made"; exit 1;;
+        esac
+    done
+}
+
+query()
+{
+	# Pass query string, accept, reject strings. Return boolean
+	# Default the accept reject strings?
+	echo Not yet implemented
+}
 
 
 #-------------------------------------------------------------------------------------
