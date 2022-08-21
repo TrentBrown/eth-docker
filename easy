@@ -417,8 +417,6 @@ images-clean()
 	# TODO: DOES THIS BELONG HERE?
 	# networks-clean
 
-	# Interestingly, this will delete project images even if containers have not yet been created from them
-	# whereas "docker-compose images" will not list the images until containers have been created.
 	docker-compose down --rmi all
 
 	# if ${LAYERS}; then
@@ -443,21 +441,20 @@ images-prune()
 ## List all eth-docker images
 images-list()
 {
-	docker images \
-		--filter label=com.docker.compose.project=eth-docker
+	docker images --filter label=com.docker.compose.project=eth-docker
 }
 
 #- List layers in image
-images-list-layers()
-{
-	@docker history ${IMAGE_NAME}:${PROJECT_VERSION}
-}
+# images-list-layers()
+# {
+# 	@docker history ${IMAGE_NAME}:${PROJECT_VERSION}
+# }
 
 #- List layers in image without truncating command lines
-images-list-layers-full()
-{
-	@docker history --no-trunc ${IMAGE_NAME}:${PROJECT_VERSION}
-}
+# images-list-layers-full()
+# {
+# 	@docker history --no-trunc ${IMAGE_NAME}:${PROJECT_VERSION}
+# }
 
 
 #-------------------------------------------------------------------------------------
@@ -467,17 +464,15 @@ images-list-layers-full()
 #-------------------------------------------------------------------------------------
 
 #- Create containers from images
-# TODO: Why does this build pull a bunch of other images? I want to have all the images
-# in place by the time we get here. The "images-build" function should do this.
 containers-build()
 {
-	docker-compose up --no-start --no-build --no-recreate
+	docker-compose up --no-recreate --no-build --no-start
 }
 
 #- Delete containers
 containers-clean()
 {
-	# Make sure no containers are running. We can't delete them, if they aren't
+	# Make sure no containers are running. We can't delete them, if they are
 	instances-clean
 
 	docker-compose rm --force
@@ -500,13 +495,7 @@ containers-rebuild()
 
 containers-list()
 {
-    docker ps \
-		--all \
-		--filter label=com.docker.compose.project=eth-docker \
-		--filter status=created \
-		--filter status=exited \
-		--filter status=removing \
-		--filter status=dead
+    docker ps --all --filter label=com.docker.compose.project=eth-docker
 }
 
 ## Prune orphan/unreferenced containers
@@ -544,12 +533,7 @@ instances-rebuild()
 #- List container instances
 instances-list()
 {
-    docker ps \
-		--all \
-		--filter label=com.docker.compose.project=eth-docker \
-		--filter status=running \
-		--filter status=restarting \
-		--filter status=paused
+    docker ps --filter label=com.docker.compose.project=eth-docker
 }
 
 ## Show container instances logs
