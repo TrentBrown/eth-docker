@@ -272,7 +272,7 @@ tools-clear-clear-linux()
 
 swupd-package-is-installed()
 {
-	sudo swupd bundle-info $1 &>/dev/null 
+	sudo swupd bundle-info $1 | grep "Explicitly installed" > /dev/null
 }
 
 swupd-package-install()
