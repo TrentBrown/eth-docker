@@ -180,12 +180,15 @@ docker-sudo-hack()
 
 group-exists()
 {
-	getent group $1 &> /dev/null
+	local name=$1
+	getent group $name &> /dev/null
 }
 
 user-is-in-group()
 {
-	getent group $2 | grep $1 &> /dev/null
+	local userName=$2
+	local groupName=$1
+	getent group $userName | grep $groupName &> /dev/null
 }
 
 xcode-is-installed()
@@ -200,36 +203,41 @@ homebrew-is-installed()
 
 homebrew-package-is-installed()
 {
-    brew list $1 &>/dev/null
+	local name=$1
+    brew list $name &>/dev/null
 }
 
 homebrew-package-install()
 {
-	echo Installing $1
-	brew install $1
+	local name=$1
+	echo Installing $name
+	brew install $name
 }
 
 homebrew-package-remove()
 {
-	echo Removing $1
-	brew uninstall $1
+	local name=$1
+	echo Removing $name
+	brew uninstall $name
 }
 
 homebrew-package-check-install()
 {
-    if homebrew-package-is-installed $1; then
+	local name=$1
+    if homebrew-package-is-installed $name; then
         echo $1 package is already installed
     else
-        homebrew-package-install $1
+        homebrew-package-install $name
     fi
 }
 
 homebrew-package-check-remove()
 {
-    if homebrew-package-is-installed $1; then
-		homebrew-package-remove $1
+	local name=$1
+    if homebrew-package-is-installed $name; then
+		homebrew-package-remove $name
     else
-        echo $1 package already removed
+        echo $name package already removed
     fi
 }
 
@@ -244,16 +252,12 @@ tools-build-clear-linux()
 {
 	sudo swupd update
 
-	if swupd-package-is-installed docker-compose; then
-		echo docker-compose is already installed
-	else
-		swupd-package-install docker-compose
-
-		sudo systemctl enable docker
-		sudo systemctl start docker
-	fi
-
+	swupd-package-check-install docker-compose
+	swupd-package-check-install devpkg-newt
 	swupd-package-check-install gh
+
+	sudo systemctl enable docker
+	sudo systemctl start docker
 
 	# TODO: Need to change storage driver for prod?
 	# See: https://docs.01.org/clearlinux/latest/tutorials/docker.html
@@ -272,36 +276,41 @@ tools-clear-clear-linux()
 
 swupd-package-is-installed()
 {
-	sudo swupd bundle-info $1 | grep "Explicitly installed" > /dev/null
+	local name=$1
+	sudo swupd bundle-info $name | grep "Explicitly installed" > /dev/null
 }
 
 swupd-package-install()
 {
-    echo Installing $1
-	sudo swupd bundle-add $1
+	local name=$1
+    echo Installing $name
+	sudo swupd bundle-add $name
 }
 
 swupd-package-remove()
 {
-    echo Removing $1
-	sudo swupd bundle-remove $1
+	local name=$1
+    echo Removing $name
+	sudo swupd bundle-remove $name
 }
 
 swupd-package-check-install()
 {
-    if swupd-package-is-installed $1; then
-        echo $1 package is already installed
+	local name=$1
+    if swupd-package-is-installed $name; then
+        echo $name package is already installed
     else
-		swupd-package-install $1
+		swupd-package-install $name
     fi
 }
 
 swupd-package-check-remove()
 {
-    if swupd-package-is-installed $1; then
-		swupd-package-remove $1
+	local name=$1
+    if swupd-package-is-installed $name; then
+		swupd-package-remove $name
     else
-        echo $1 package already removed
+        echo $name package already removed
     fi
 }
 
@@ -350,6 +359,7 @@ config-build()
 
 config-clean()
 {
+	confirm-or-exit "Are you sure you want to delete all \".env*\" files?"
 	rm -f .env*
 }
 
@@ -362,25 +372,6 @@ config-rebuild()
 config-show()
 {
 	less .env
-}
-
-config-create-keys()
-{
-    sudo docker-compose run --rm deposit-cli-new --eth1_withdrawal_address YOURHARDWAREWALLETADDRESS --uid $(id -u)
-}
-
-# See: https://eth-docker.net/docs/Usage/ConfigureWallet
-config-check-keys()
-{
-    sudo docker-compose run --rm deposit-cli-existing --folder seed_check --eth1_withdrawal_address YOURHARDWAREWALLETADDRESS --uid $(id -u)
-    diff -s .eth/validator_keys/deposit_data*.json .eth/seed_check/deposit_data*.json
-    rm .eth/seed_check/*
-}
-
-# See: https://eth-docker.net/docs/Usage/ImportKeys
-config-import-keys()
-{
-	echo Not yet implemented
 }
 
 config-firewall-clear-linux()
@@ -400,6 +391,52 @@ git-has-uncommitted-changes()
 
 
 #-------------------------------------------------------------------------------------
+# Keys
+#-------------------------------------------------------------------------------------
+
+
+keys-build()
+{
+	confirm-or-exit "If you're creating keys for mainnet, do this on an airgapped machine. Continue?"
+	query "What is your withdrawal wallet public address?" walletAddress
+
+    docker-compose run \
+		--rm deposit-cli-new \
+		--eth1_withdrawal_address $walletAddress \
+		--uid $(id --user)
+}
+
+keys-clean()
+{
+	confirm-or-exit "Are you sure you want to delete the keys?"
+
+	rm -f ./.eth/validator_keys/deposit_data-*.json
+	rm -f ./.eth/validator_keys/keystore-*.json
+}
+
+# See: https://eth-docker.net/docs/Usage/ConfigureWallet
+keys-check()
+{
+	query "What is your withdrawal wallet public address?" walletAddress
+    docker-compose run \
+		--rm deposit-cli-existing \
+		--folder seed_check \
+		--eth1_withdrawal_address $walletAddress \
+		--uid $(id --user)
+    diff -s \
+		.eth/validator_keys/deposit_data*.json \
+		.eth/seed_check/deposit_data*.json
+    rm .eth/seed_check/*
+}
+
+# See: https://eth-docker.net/docs/Usage/ImportKeys
+keys-import()
+{
+	./ethd keyimport
+}
+
+
+#-------------------------------------------------------------------------------------
 # Image
 #-------------------------------------------------------------------------------------
 
@@ -414,6 +451,8 @@ images-build()
 #- Delete image
 images-clean()
 {
+	# confirm-or-exit "Are you sure you want to delete all images?"
+
 	# TODO: DOES THIS BELONG HERE?
 	# networks-clean
 
@@ -472,6 +511,8 @@ containers-build()
 #- Delete containers
 containers-clean()
 {
+	# confirm-or-exit "Are you sure you want to delete all containers?"
+
 	# Make sure no containers are running. We can't delete them, if they are
 	instances-clean
 
@@ -521,6 +562,8 @@ instances-build()
 #- Stop container instances
 instances-clean()
 {
+	# confirm-or-exit "Are you sure you want to stop all running containers?"
+
 	docker-compose stop
 }
 
@@ -536,16 +579,35 @@ instances-list()
     docker ps --filter label=com.docker.compose.project=eth-docker
 }
 
-## Show container instances logs
-instances-logs()
-{
-	docker-compose logs --follow --tail 100
-}
-
 ## Check health of container and its processes
 instances-health()
 {
 	@printf "Container health check: " && docker inspect ${CONTAINER_NAME} | jq '.[].State.Health.Status'
+}
+
+
+#-------------------------------------------------------------------------------------
+# Logging
+#-------------------------------------------------------------------------------------
+
+logs-all()
+{
+	docker-compose logs --follow --tail 100
+}
+
+logs-consensus()
+{
+	docker-compose logs --follow --tail 100 consensus
+}
+
+logs-validator()
+{
+	docker-compose logs --follow --tail 100 validator
+}
+
+logs-execution()
+{
+	docker-compose logs --follow --tail 100 execution
 }
 
 
@@ -564,6 +626,14 @@ volumes-list()
 volumes-prune()
 {
 	docker volume prune
+}
+
+volumes-clean()
+{
+	echo TBD
+	# See: https://eth-docker.net/docs/Support/Testing/
+	# sudo docker volume rm $(sudo docker volume ls -q | grep eth-docker), wipe volumes from last pass,
+	# assuming that eth-docker is the directory we are testing in.
 }
 
 
@@ -718,8 +788,9 @@ fi
 
 confirm-or-exit()
 {
+	local prompt=$1
 	while true; do
-        read -rp "$1" yn
+        read -rp "$prompt (No/Yes) " yn
         case $yn in
             [Yy]es ) break;;
             * ) echo "Aborting, no changes made"; exit 1;;
@@ -729,14 +800,17 @@ confirm-or-exit()
 
 query()
 {
-	# Pass query string, accept, reject strings. Return boolean
-	# Default the accept reject strings?
-	echo Not yet implemented
+	local prompt=$1
+	local resultVariable=$2
+	echo -n "$prompt and press [ENTER]: "
+	read response
+    eval $resultVariable="'$response'"
 }
 
 test()
 {
-	confirm-or-exit "WARNING - this action will destroy data stores. Do you wish to continue? (No/Yes) "
+	query "Please enter your wallet address" response
+	echo $response
 }
 
 
