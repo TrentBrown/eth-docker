@@ -2,6 +2,8 @@ ARG DOCKER_TAG
 
 FROM chainsafe/lodestar:${DOCKER_TAG}
 
+LABEL com.docker.compose.project=eth-docker
+
 # Here only to avoid build-time errors
 ARG BUILD_TARGET
 

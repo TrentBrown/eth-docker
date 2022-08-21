@@ -14,6 +14,8 @@ RUN bash -c "cd .. && rm -rf app && git clone https://github.com/ChainSafe/lodes
 
 FROM node:18-alpine
 
+LABEL com.docker.compose.project=eth-docker
+
 RUN apk update && apk add --no-cache ca-certificates tzdata bash su-exec && rm -rf /var/cache/apk/*
 
 WORKDIR /usr/app

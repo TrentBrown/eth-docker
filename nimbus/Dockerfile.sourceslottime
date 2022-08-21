@@ -16,6 +16,8 @@ RUN bash -c "git clone https://github.com/status-im/nim-beacon-chain && cd nim-b
 # Pull all binaries into a second stage deploy debian container
 FROM debian:bullseye-slim
 
+LABEL com.docker.compose.project=eth-docker
+
 ARG USER=user
 ARG UID=10002
 

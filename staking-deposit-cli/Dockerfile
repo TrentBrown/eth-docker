@@ -9,6 +9,8 @@ RUN bash -c "git clone https://github.com/ethereum/staking-deposit-cli.git && cd
 
 FROM python:3.10-alpine
 
+LABEL com.docker.compose.project=eth-docker
+
 ARG USER=depcli
 ARG UID=1000
 

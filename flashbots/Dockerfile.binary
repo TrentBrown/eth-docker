@@ -1,6 +1,8 @@
 ARG DOCKER_TAG
 FROM flashbots/mev-boost:${DOCKER_TAG} as mev
 
+LABEL com.docker.compose.project=eth-docker
+
 ARG USER=mev
 ARG UID=10666
 

@@ -50,18 +50,6 @@ set -uo pipefail  # For release
 # 
 # TODO: Figure out how specify mainnet/production vs testnet (which chain?) Extra strong warnings for mainnet?
 #
-# TODO: Change to this form:
-#
-# if cond then
-#	do something
-# fi
-#
-# if cond then
-#	do something
-# else
-#	do something else
-# fi
-#
 # TODO: Consider not allowing the force param to suppress confirmation dialog when dealing with volumes and the 
 # beacon chain data. "You're using the 'force' param, but this is too important not to ask: Are you SURE you 
 # want to delete your beacon chain data? It can take weeks to restore it". " Last chance. Are you really, REALLY sure you want
@@ -144,8 +132,7 @@ tools-rebuild()
 tools-build-mac()
 {
     # Install Apple XCode command line tools
-    if xcode-is-installed
-    then
+    if xcode-is-installed; then
         echo Mac Xcode command line tools are already installed
     else
         echo Installing Mac Xcode command line tools
@@ -154,8 +141,7 @@ tools-build-mac()
 
     # Install Homebrew package manager
     # See: https://brew.sh/
-	if homebrew-is-installed
-    then
+	if homebrew-is-installed; then
         echo Homebrew package manager is already installed
     else
         echo Installing Homebrew package manager
@@ -169,6 +155,37 @@ tools-build-mac()
     # Install newt
     # See: https://pagure.io/newt
     homebrew-package-check-install newt
+}
+
+docker-sudo-hack()
+{
+	# Find or create a "docker" group
+	if group-exists docker; then
+		echo A "docker" group already exists
+	else
+		echo Creating "docker" group
+		sudo groupadd docker
+	fi
+
+	# Add user to the "docker" group
+	if user-is-in-group $USER docker; then
+		echo User $USER is already in the docker group
+	else
+		echo Adding $USER to the docker group
+		sudo usermod --append --groups docker $USER
+		echo You must re-log in for this to take effect
+		# TODO: Prompt to do this now (ie. exit shell)
+	fi
+}
+
+group-exists()
+{
+	getent group $1 &> /dev/null
+}
+
+user-is-in-group()
+{
+	getent group $2 | grep $1 &> /dev/null
 }
 
 xcode-is-installed()
@@ -186,25 +203,33 @@ homebrew-package-is-installed()
     brew list $1 &>/dev/null
 }
 
+homebrew-package-install()
+{
+	echo Installing $1
+	brew install $1
+}
+
+homebrew-package-remove()
+{
+	echo Removing $1
+	brew uninstall $1
+}
+
 homebrew-package-check-install()
 {
-    if homebrew-package-is-installed $1
-    then
+    if homebrew-package-is-installed $1; then
         echo $1 package is already installed
     else
-        echo Installing $1
-	    brew install $1
+        homebrew-package-install $1
     fi
 }
 
-homebrew-package-check-uninstall()
+homebrew-package-check-remove()
 {
-    if homebrew-package-is-installed $1
-    then
-        echo Uninstalling $1
-	    brew uninstall $1
+    if homebrew-package-is-installed $1; then
+		homebrew-package-remove $1
     else
-        echo $1 package is already uninstalled
+        echo $1 package already removed
     fi
 }
 
@@ -218,13 +243,66 @@ tools-build-win()
 tools-build-clear-linux()
 {
 	sudo swupd update
-	sudo swupd bundle-add containers-basic
-	sudo swupd bundle-add docker-compose
-	sudo systemctl enable docker
-	sudo systemctl start docker
+
+	if swupd-package-is-installed docker-compose; then
+		echo docker-compose is already installed
+	else
+		swupd-package-install docker-compose
+
+		sudo systemctl enable docker
+		sudo systemctl start docker
+	fi
+
+	swupd-package-check-install gh
 
 	# TODO: Need to change storage driver for prod?
 	# See: https://docs.01.org/clearlinux/latest/tutorials/docker.html
+}
+
+# TODO: Add support for "gh auth login"
+# And 
+	# git config --global user.email "you@example.com"
+	# git config --global user.name "Your Name"
+
+
+tools-clear-clear-linux()
+{
+	echo TBD
+}
+
+swupd-package-is-installed()
+{
+	sudo swupd bundle-info $1 &>/dev/null 
+}
+
+swupd-package-install()
+{
+    echo Installing $1
+	sudo swupd bundle-add $1
+}
+
+swupd-package-remove()
+{
+    echo Removing $1
+	sudo swupd bundle-remove $1
+}
+
+swupd-package-check-install()
+{
+    if swupd-package-is-installed $1; then
+        echo $1 package is already installed
+    else
+		swupd-package-install $1
+    fi
+}
+
+swupd-package-check-remove()
+{
+    if swupd-package-is-installed $1; then
+		swupd-package-remove $1
+    else
+        echo $1 package already removed
+    fi
 }
 
 #- Uninstall Mac dev env
@@ -233,8 +311,8 @@ tools-clean-mac()
 	# TODO: Check flag for expunging. Default should be *not* to expunge, because folks may already have
 	# these tools and may have dependencies on them
 
-    homebrew-package-check-uninstall newt
-    homebrew-package-check-uninstall coreutils
+    homebrew-package-check-remove newt
+    homebrew-package-check-remove coreutils
     # TODO: Decide whether we really do want to remove Homebrew and Xcode completely. Or the others, for that matter
 }
 
@@ -257,8 +335,7 @@ tools-clean-clear-linux()
 
 config-build-interactive()
 {
-    if git-has-uncommitted-changes
-    then
+    if git-has-uncommitted-changes; then
         echo You have uncommitted changes in Git. We need to switch branches, so you\'ll need to commit those first
         exit
     fi
@@ -330,6 +407,8 @@ git-has-uncommitted-changes()
 images-build()
 {
 	docker-compose build --pull
+	
+	# TODO: Add the "--squash" option here and test
 }
 
 #- Delete image
@@ -342,8 +421,7 @@ images-clean()
 	# whereas "docker-compose images" will not list the images until containers have been created.
 	docker-compose down --rmi all
 
-	# if ${LAYERS}
-	# then
+	# if ${LAYERS}; then
 	# 	layers-clean
 	# fi
 }
@@ -365,9 +443,8 @@ images-prune()
 ## List all eth-docker images
 images-list()
 {
-	# We use "docker image ls" with a filter here because "docker-compose images" will only list our
-	# images after we've created containers for them, and we may not have done so yet.
-	docker image ls "ethd/*" 
+	docker images \
+		--filter label=com.docker.compose.project=eth-docker
 }
 
 #- List layers in image
@@ -394,11 +471,10 @@ images-list-layers-full()
 # in place by the time we get here. The "images-build" function should do this.
 containers-build()
 {
-	docker-compose create --no-build --no-recreate
+	docker-compose up --no-start --no-build --no-recreate
 }
 
 #- Delete containers
-# TODO: Not all containers are removed: teku:local and besu:local
 containers-clean()
 {
 	# Make sure no containers are running. We can't delete them, if they aren't
@@ -406,13 +482,11 @@ containers-clean()
 
 	docker-compose rm --force
 
-	# if ${NETWORKS}
-	# then
+	# if ${NETWORKS}; then
 	# 	networks-clean
 	# fi
 
-	# if ${VOLUMES}
-	# then
+	# if ${VOLUMES}; then
 	# 	volumes-clean
 	# fi
 }
@@ -426,11 +500,13 @@ containers-rebuild()
 
 containers-list()
 {
-    docker compose ps \
-		--status=created \
-		--status=exited \
-		--status=removing \
-		--status=dead
+    docker ps \
+		--all \
+		--filter label=com.docker.compose.project=eth-docker \
+		--filter status=created \
+		--filter status=exited \
+		--filter status=removing \
+		--filter status=dead
 }
 
 ## Prune orphan/unreferenced containers
@@ -450,34 +526,36 @@ containers-prune()
 #- Start container instances
 instances-build()
 {
-	docker compose start
+	docker-compose start
 }
 
 #- Stop container instances
 instances-clean()
 {
-	docker compose stop
+	docker-compose stop
 }
 
 #- Restart container instances
 instances-rebuild()
 {
-	docker compose restart
+	docker-compose restart
 }
 
 #- List container instances
 instances-list()
 {
-    docker compose ps \
-		--status=running \
-		--status=restarting \
-		--status=paused
+    docker ps \
+		--all \
+		--filter label=com.docker.compose.project=eth-docker \
+		--filter status=running \
+		--filter status=restarting \
+		--filter status=paused
 }
 
 ## Show container instances logs
 instances-logs()
 {
-	docker compose logs --follow --tail 100
+	docker-compose logs --follow --tail 100
 }
 
 ## Check health of container and its processes
@@ -491,7 +569,7 @@ instances-health()
 # Volumes
 #-------------------------------------------------------------------------------------
 
-# TODO: There is no "docker compose volume ls" to limit to volumes related to a project.
+# TODO: There is no "docker-compose volume ls" to limit to volumes related to a project.
 # We need to use the "--filter" parameter of "docker volume ls" to accomplish this.
 # See: https://docs.docker.com/engine/reference/commandline/volume_ls/#filtering
 volumes-list()
@@ -509,7 +587,7 @@ volumes-prune()
 # Networks
 #-------------------------------------------------------------------------------------
 
-# TODO: There is no "docker compose network ls" to limit to networks related to a project.
+# TODO: There is no "docker-compose network ls" to limit to networks related to a project.
 # We need to use the "--filter" parameter of "docker network ls" to accomplish this.
 # See: https://docs.docker.com/engine/reference/commandline/network_ls/#filtering
 networks-list()

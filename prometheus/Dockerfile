@@ -1,5 +1,7 @@
 FROM prom/prometheus
 
+LABEL com.docker.compose.project=eth-docker
+
 COPY ./*-prom.yml /etc/prometheus/
 COPY ./none.yml /etc/prometheus
 COPY ./choose-config.sh /usr/local/bin/choose-config.sh

@@ -1,7 +1,11 @@
 ARG DOCKER_TAG
 FROM prysmaticlabs/prysm-beacon-chain:${DOCKER_TAG} as ccsource
 
+LABEL com.docker.compose.project=eth-docker
+
 FROM debian:bullseye-slim as consensus
+
+LABEL com.docker.compose.project=eth-docker
 
 #Included here to avoid build-time complaints
 ARG BUILD_TARGET
@@ -43,7 +47,11 @@ ENTRYPOINT ["beacon-chain"]
 
 FROM prysmaticlabs/prysm-validator:${DOCKER_TAG} as vcsource
 
+LABEL com.docker.compose.project=eth-docker
+
 FROM consensus as validator
+
+LABEL com.docker.compose.project=eth-docker
 
 ARG USER=prysmvalidator
 ARG UID=10000
