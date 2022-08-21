@@ -252,6 +252,7 @@ tools-build-clear-linux()
 {
 	sudo swupd update
 
+	swupd-package-check-install zsh
 	swupd-package-check-install docker-compose
 	swupd-package-check-install devpkg-newt
 	swupd-package-check-install gh
@@ -432,6 +433,7 @@ keys-check()
 # See: https://eth-docker.net/docs/Usage/ImportKeys
 keys-import()
 {
+	# TODO: Consider factoring this out
 	./ethd keyimport
 }
 
@@ -608,6 +610,73 @@ logs-validator()
 logs-execution()
 {
 	docker-compose logs --follow --tail 100 execution
+}
+
+dashboards()
+{
+	open http://moneybox:3000/d/nQaRO6Yiz/prysm_ynager?orgId=1&refresh=30s
+}
+
+tmux-session-list()
+{
+	tmux ls
+}
+
+tmux-console-build()
+{
+	# Create the console session
+	local session=console
+	tmux new-session -d -s $session
+
+	# Build a dashboard in the first window
+	local consoleWindow=0
+	tmux rename-window -t $session:$consoleWindow 'Dashboard'
+	tmux send-keys -t $session:$consoleWindow 'htop' C-m
+
+	tmux split-window -v './easy logs-consensus'
+	tmux split-window -v './easy logs-execution'
+	tmux split-window -v './easy logs-validator'
+	tmux select-layout even-vertical
+	# tmux split-window -v
+	# tmux split-window -v
+	# tmux split-window -v
+
+	# tmux split-window -t $session:$consoleWindow -v -p 50
+	# local bottomPane = $TMUX_PANE
+
+	# tmux split-window -t $bottomPane -v -p 50 
+
+	# tmux split-window -t $session:$consoleWindow -v -p 50 
+	# tmux split-window -v -p 50 
+
+	# tmux split-window -v -p 75 './easy logs-consensus'
+	# tmux split-window -v -p 66 './easy logs-execution'
+	# tmux split-window -v -p 50 './easy logs-validator'
+
+	# Put a shell into the second window
+	# local shellWindow=1
+	# tmux new-window -t $session:$shellWindow -n 'Shell'
+	# tmux send-keys -t $session:$shellWindow 'zsh' C-m 'clear' C-m
+
+	# # Go back to console window
+	# tmux select-window -t $session:$consoleWindow
+}
+
+tmux-console-clean()
+{
+	# confirm-or-exit "Are you sure you want to kill the tmux logs session?"
+	tmux kill-session -t console
+}
+
+tmux-console-rebuild()
+{
+	tmux-console-clean
+	tmux-console-build
+}
+
+tmux-console-attach()
+{
+	tmux attach-session -t console
 }
 
 
