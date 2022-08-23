@@ -500,8 +500,6 @@ images-list()
 
 #-------------------------------------------------------------------------------------
 # Containers
-#
-# (Not running)
 #-------------------------------------------------------------------------------------
 
 #- Create containers from images
@@ -636,7 +634,9 @@ tmux-console-build()
 	tmux split-window -v './easy logs-consensus'
 	tmux split-window -v './easy logs-execution'
 	tmux split-window -v './easy logs-validator'
+
 	tmux select-layout even-vertical
+
 	# tmux split-window -v
 	# tmux split-window -v
 	# tmux split-window -v
@@ -703,6 +703,11 @@ volumes-clean()
 	# See: https://eth-docker.net/docs/Support/Testing/
 	# sudo docker volume rm $(sudo docker volume ls -q | grep eth-docker), wipe volumes from last pass,
 	# assuming that eth-docker is the directory we are testing in.
+}
+
+volumes-beacon-size()
+{
+	sudo du --bytes --total /var/lib/docker/volumes/eth-docker_prysmbeacon-data/_data/beaconchaindata
 }
 
 
