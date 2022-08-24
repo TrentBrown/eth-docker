@@ -2,6 +2,8 @@ ARG DOCKER_TAG
 
 FROM hyperledger/besu:${DOCKER_TAG}
 
+LABEL com.docker.compose.project=eth-docker
+
 # Unused but included to avoid warnings
 ARG BUILD_TARGET
 

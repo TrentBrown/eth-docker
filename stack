@@ -50,28 +50,29 @@ set -uo pipefail  # For release
 # 
 # TODO: Figure out how specify mainnet/production vs testnet (which chain?) Extra strong warnings for mainnet?
 #
-# TODO: Change to this form:
-#
-# if cond then
-#	do something
-# fi
-#
-# if cond then
-#	do something
-# else
-#	do something else
-# fi
-#
 # TODO: Consider not allowing the force param to suppress confirmation dialog when dealing with volumes and the 
 # beacon chain data. "You're using the 'force' param, but this is too important not to ask: Are you SURE you 
 # want to delete your beacon chain data? It can take weeks to restore it". " Last chance. Are you really, REALLY sure you want
 # to delete your beacon chain data? Don't say I didn't warn you."
 
 
+
+
+#-------------------------------------------------------------------------------------
+# Web Pages
+#-------------------------------------------------------------------------------------
+
 ## Open documentation
 open-docs()
 {
     open https://eth-docker.net/docs/Usage/ClientSetup
+}
+
+## Open beaconcha.in page on our validator
+PUBLIC_KEY=800008215f7de68bf2804079aa778d0034a95bbe83d5662ef174db3d9343e3ead6f48f53890e225cc834972e5e04ef6a
+open-beaconchain()
+{
+    open https://beaconcha.in/validator/${PUBLIC_KEY}
 }
 
 
@@ -144,8 +145,7 @@ tools-rebuild()
 tools-build-mac()
 {
     # Install Apple XCode command line tools
-    if xcode-is-installed
-    then
+    if xcode-is-installed; then
         echo Mac Xcode command line tools are already installed
     else
         echo Installing Mac Xcode command line tools
@@ -154,8 +154,7 @@ tools-build-mac()
 
     # Install Homebrew package manager
     # See: https://brew.sh/
-	if homebrew-is-installed
-    then
+	if homebrew-is-installed; then
         echo Homebrew package manager is already installed
     else
         echo Installing Homebrew package manager
@@ -171,6 +170,40 @@ tools-build-mac()
     homebrew-package-check-install newt
 }
 
+docker-sudo-hack()
+{
+	# Find or create a "docker" group
+	if group-exists docker; then
+		echo A "docker" group already exists
+	else
+		echo Creating "docker" group
+		sudo groupadd docker
+	fi
+
+	# Add user to the "docker" group
+	if user-is-in-group $USER docker; then
+		echo User $USER is already in the docker group
+	else
+		echo Adding $USER to the docker group
+		sudo usermod --append --groups docker $USER
+		echo You must re-log in for this to take effect
+		# TODO: Prompt to do this now (ie. exit shell)
+	fi
+}
+
+group-exists()
+{
+	declare -r name=$1
+	getent group $name &> /dev/null
+}
+
+user-is-in-group()
+{
+	declare -r userName=$2
+	declare -r groupName=$1
+	getent group $userName | grep $groupName &> /dev/null
+}
+
 xcode-is-installed()
 {
     xcode-select --print-path 1>/dev/null
@@ -183,28 +216,41 @@ homebrew-is-installed()
 
 homebrew-package-is-installed()
 {
-    brew list $1 &>/dev/null
+	declare -r name=$1
+    brew list $name &>/dev/null
+}
+
+homebrew-package-install()
+{
+	declare -r name=$1
+	echo Installing $name
+	brew install $name
+}
+
+homebrew-package-remove()
+{
+	declare -r name=$1
+	echo Removing $name
+	brew uninstall $name
 }
 
 homebrew-package-check-install()
 {
-    if homebrew-package-is-installed $1
-    then
+	declare -r name=$1
+    if homebrew-package-is-installed $name; then
         echo $1 package is already installed
     else
-        echo Installing $1
-	    brew install $1
+        homebrew-package-install $name
     fi
 }
 
-homebrew-package-check-uninstall()
+homebrew-package-check-remove()
 {
-    if homebrew-package-is-installed $1
-    then
-        echo Uninstalling $1
-	    brew uninstall $1
+	declare -r name=$1
+    if homebrew-package-is-installed $name; then
+		homebrew-package-remove $name
     else
-        echo $1 package is already uninstalled
+        echo $name package already removed
     fi
 }
 
@@ -218,13 +264,68 @@ tools-build-win()
 tools-build-clear-linux()
 {
 	sudo swupd update
-	sudo swupd bundle-add containers-basic
-	sudo swupd bundle-add docker-compose
+
+	swupd-package-check-install zsh
+	swupd-package-check-install docker-compose
+	swupd-package-check-install devpkg-newt
+	swupd-package-check-install gh
+
 	sudo systemctl enable docker
 	sudo systemctl start docker
 
 	# TODO: Need to change storage driver for prod?
 	# See: https://docs.01.org/clearlinux/latest/tutorials/docker.html
+}
+
+# TODO: Add support for "gh auth login"
+# And 
+	# git config --global user.email "you@example.com"
+	# git config --global user.name "Your Name"
+
+
+tools-clear-clear-linux()
+{
+	echo TBD
+}
+
+swupd-package-is-installed()
+{
+	declare -r name=$1
+	sudo swupd bundle-info $name | grep "Explicitly installed" > /dev/null
+}
+
+swupd-package-install()
+{
+	declare -r name=$1
+    echo Installing $name
+	sudo swupd bundle-add $name
+}
+
+swupd-package-remove()
+{
+	declare -r name=$1
+    echo Removing $name
+	sudo swupd bundle-remove $name
+}
+
+swupd-package-check-install()
+{
+	declare -r name=$1
+    if swupd-package-is-installed $name; then
+        echo $name package is already installed
+    else
+		swupd-package-install $name
+    fi
+}
+
+swupd-package-check-remove()
+{
+	declare -r name=$1
+    if swupd-package-is-installed $name; then
+		swupd-package-remove $name
+    else
+        echo $name package already removed
+    fi
 }
 
 #- Uninstall Mac dev env
@@ -233,8 +334,8 @@ tools-clean-mac()
 	# TODO: Check flag for expunging. Default should be *not* to expunge, because folks may already have
 	# these tools and may have dependencies on them
 
-    homebrew-package-check-uninstall newt
-    homebrew-package-check-uninstall coreutils
+    homebrew-package-check-remove newt
+    homebrew-package-check-remove coreutils
     # TODO: Decide whether we really do want to remove Homebrew and Xcode completely. Or the others, for that matter
 }
 
@@ -257,8 +358,7 @@ tools-clean-clear-linux()
 
 config-build-interactive()
 {
-    if git-has-uncommitted-changes
-    then
+    if git-has-uncommitted-changes; then
         echo You have uncommitted changes in Git. We need to switch branches, so you\'ll need to commit those first
         exit
     fi
@@ -273,6 +373,7 @@ config-build()
 
 config-clean()
 {
+	confirm-or-exit "Are you sure you want to delete all \".env*\" files?"
 	rm -f .env*
 }
 
@@ -285,25 +386,6 @@ config-rebuild()
 config-show()
 {
 	less .env
-}
-
-config-create-keys()
-{
-    sudo docker-compose run --rm deposit-cli-new --eth1_withdrawal_address YOURHARDWAREWALLETADDRESS --uid $(id -u)
-}
-
-# See: https://eth-docker.net/docs/Usage/ConfigureWallet
-config-check-keys()
-{
-    sudo docker-compose run --rm deposit-cli-existing --folder seed_check --eth1_withdrawal_address YOURHARDWAREWALLETADDRESS --uid $(id -u)
-    diff -s .eth/validator_keys/deposit_data*.json .eth/seed_check/deposit_data*.json
-    rm .eth/seed_check/*
-}
-
-# See: https://eth-docker.net/docs/Usage/ImportKeys
-config-import-keys()
-{
-	echo Not yet implemented
 }
 
 config-firewall-clear-linux()
@@ -323,6 +405,52 @@ git-has-uncommitted-changes()
 
 
 #-------------------------------------------------------------------------------------
+# Keys
+#-------------------------------------------------------------------------------------
+
+keys-build()
+{
+	confirm-or-exit "If you're creating keys for mainnet, do this on an airgapped machine. Continue?"
+	query "What is your withdrawal wallet public address?" walletAddress
+
+    docker-compose run \
+		--rm deposit-cli-new \
+		--eth1_withdrawal_address $walletAddress \
+		--uid $(id --user)
+}
+
+keys-clean()
+{
+	confirm-or-exit "Are you sure you want to delete the keys?"
+
+	rm -f ./.eth/validator_keys/deposit_data-*.json
+	rm -f ./.eth/validator_keys/keystore-*.json
+}
+
+# See: https://eth-docker.net/docs/Usage/ConfigureWallet
+keys-check()
+{
+	query "What is your withdrawal wallet public address?" walletAddress
+    docker-compose run \
+		--rm deposit-cli-existing \
+		--folder seed_check \
+		--eth1_withdrawal_address $walletAddress \
+		--uid $(id --user)
+    diff -s \
+		.eth/validator_keys/deposit_data*.json \
+		.eth/seed_check/deposit_data*.json
+    rm .eth/seed_check/*
+}
+
+# See: https://eth-docker.net/docs/Usage/ImportKeys
+keys-import()
+{
+	# TODO: Consider factoring this out
+	./ethd keyimport
+}
+
+
+#-------------------------------------------------------------------------------------
 # Image
 #-------------------------------------------------------------------------------------
 
@@ -330,20 +458,21 @@ git-has-uncommitted-changes()
 images-build()
 {
 	docker-compose build --pull
+	
+	# TODO: Add the "--squash" option here and test
 }
 
 #- Delete image
 images-clean()
 {
+	# confirm-or-exit "Are you sure you want to delete all images?"
+
 	# TODO: DOES THIS BELONG HERE?
 	# networks-clean
 
-	# Interestingly, this will delete project images even if containers have not yet been created from them
-	# whereas "docker-compose images" will not list the images until containers have been created.
 	docker-compose down --rmi all
 
-	# if ${LAYERS}
-	# then
+	# if ${LAYERS}; then
 	# 	layers-clean
 	# fi
 }
@@ -365,54 +494,47 @@ images-prune()
 ## List all eth-docker images
 images-list()
 {
-	# We use "docker image ls" with a filter here because "docker-compose images" will only list our
-	# images after we've created containers for them, and we may not have done so yet.
-	docker image ls "ethd/*" 
+	docker images --filter label=com.docker.compose.project=eth-docker
 }
 
 #- List layers in image
-images-list-layers()
-{
-	@docker history ${IMAGE_NAME}:${PROJECT_VERSION}
-}
+# images-list-layers()
+# {
+# 	@docker history ${IMAGE_NAME}:${PROJECT_VERSION}
+# }
 
 #- List layers in image without truncating command lines
-images-list-layers-full()
-{
-	@docker history --no-trunc ${IMAGE_NAME}:${PROJECT_VERSION}
-}
+# images-list-layers-full()
+# {
+# 	@docker history --no-trunc ${IMAGE_NAME}:${PROJECT_VERSION}
+# }
 
 
 #-------------------------------------------------------------------------------------
 # Containers
-#
-# (Not running)
 #-------------------------------------------------------------------------------------
 
 #- Create containers from images
-# TODO: Why does this build pull a bunch of other images? I want to have all the images
-# in place by the time we get here. The "images-build" function should do this.
 containers-build()
 {
-	docker-compose create --no-build --no-recreate
+	docker-compose up --no-recreate --no-build --no-start
 }
 
 #- Delete containers
-# TODO: Not all containers are removed: teku:local and besu:local
 containers-clean()
 {
-	# Make sure no containers are running. We can't delete them, if they aren't
+	# confirm-or-exit "Are you sure you want to delete all containers?"
+
+	# Make sure no containers are running. We can't delete them, if they are
 	instances-clean
 
 	docker-compose rm --force
 
-	# if ${NETWORKS}
-	# then
+	# if ${NETWORKS}; then
 	# 	networks-clean
 	# fi
 
-	# if ${VOLUMES}
-	# then
+	# if ${VOLUMES}; then
 	# 	volumes-clean
 	# fi
 }
@@ -426,11 +548,7 @@ containers-rebuild()
 
 containers-list()
 {
-    docker compose ps \
-		--status=created \
-		--status=exited \
-		--status=removing \
-		--status=dead
+    docker ps --all --filter label=com.docker.compose.project=eth-docker
 }
 
 ## Prune orphan/unreferenced containers
@@ -450,34 +568,27 @@ containers-prune()
 #- Start container instances
 instances-build()
 {
-	docker compose start
+	docker-compose start
 }
 
 #- Stop container instances
 instances-clean()
 {
-	docker compose stop
+	# confirm-or-exit "Are you sure you want to stop all running containers?"
+
+	docker-compose stop
 }
 
 #- Restart container instances
 instances-rebuild()
 {
-	docker compose restart
+	docker-compose restart
 }
 
 #- List container instances
 instances-list()
 {
-    docker compose ps \
-		--status=running \
-		--status=restarting \
-		--status=paused
-}
-
-## Show container instances logs
-instances-logs()
-{
-	docker compose logs --follow --tail 100
+    docker ps --filter label=com.docker.compose.project=eth-docker
 }
 
 ## Check health of container and its processes
@@ -488,10 +599,112 @@ instances-health()
 
 
 #-------------------------------------------------------------------------------------
+# Logging
+#-------------------------------------------------------------------------------------
+
+logs-all()
+{
+	docker-compose logs --follow --tail 100
+}
+
+logs-consensus()
+{
+	docker-compose logs --follow --tail 100 consensus
+}
+
+logs-validator()
+{
+	docker-compose logs --follow --tail 100 validator
+}
+
+logs-execution()
+{
+	docker-compose logs --follow --tail 100 execution
+}
+
+dashboards()
+{
+	open http://moneybox:3000/d/nQaRO6Yiz/prysm_ynager?orgId=1&refresh=30s
+}
+
+tmux-session-list()
+{
+	tmux ls
+}
+
+tmux-console-build()
+{
+	# Create the console session
+	declare -r session=console
+	tmux new-session -d -s $session
+
+	# Build a dashboard in the first window
+	declare -r consoleWindow=0
+	tmux rename-window -t $session:$consoleWindow 'Dashboard'
+	tmux send-keys -t $session:$consoleWindow 'htop' C-m
+
+	tmux split-window -v './easy logs-consensus'
+	tmux split-window -v './easy logs-execution'
+	tmux split-window -v './easy logs-validator'
+
+	tmux select-layout even-vertical
+
+	# tmux split-window -v
+	# tmux split-window -v
+	# tmux split-window -v
+
+	# tmux split-window -t $session:$consoleWindow -v -p 50
+	# declare -r bottomPane = $TMUX_PANE
+
+	# tmux split-window -t $bottomPane -v -p 50 
+
+	# tmux split-window -t $session:$consoleWindow -v -p 50 
+	# tmux split-window -v -p 50 
+
+	# tmux split-window -v -p 75 './easy logs-consensus'
+	# tmux split-window -v -p 66 './easy logs-execution'
+	# tmux split-window -v -p 50 './easy logs-validator'
+
+	# Put a shell into the second window
+	# declare -r shellWindow=1
+	# tmux new-window -t $session:$shellWindow -n 'Shell'
+	# tmux send-keys -t $session:$shellWindow 'zsh' C-m 'clear' C-m
+
+	# # Go back to console window
+	# tmux select-window -t $session:$consoleWindow
+}
+
+tmux-console-clean()
+{
+	# TODO: Have to test whether already running so we don't abort
+	
+	# confirm-or-exit "Are you sure you want to kill the tmux logs session?"
+	tmux kill-session -t console
+}
+
+tmux-console-rebuild()
+{
+	tmux-console-clean
+	tmux-console-build
+}
+
+tmux-console-attach()
+{
+	tmux attach-session -t console
+}
+
+tmux-console-rebuild-attach()
+{
+	tmux-console-rebuild
+	tmux-console-attach
+}
+
+
+#-------------------------------------------------------------------------------------
 # Volumes
 #-------------------------------------------------------------------------------------
 
-# TODO: There is no "docker compose volume ls" to limit to volumes related to a project.
+# TODO: There is no "docker-compose volume ls" to limit to volumes related to a project.
 # We need to use the "--filter" parameter of "docker volume ls" to accomplish this.
 # See: https://docs.docker.com/engine/reference/commandline/volume_ls/#filtering
 volumes-list()
@@ -504,12 +717,25 @@ volumes-prune()
 	docker volume prune
 }
 
+volumes-clean()
+{
+	echo TBD
+	# See: https://eth-docker.net/docs/Support/Testing/
+	# sudo docker volume rm $(sudo docker volume ls -q | grep eth-docker), wipe volumes from last pass,
+	# assuming that eth-docker is the directory we are testing in.
+}
+
+volumes-beacon-size()
+{
+	sudo du --bytes --total /var/lib/docker/volumes/eth-docker_prysmbeacon-data/_data/beaconchaindata
+}
+
 
 #-------------------------------------------------------------------------------------
 # Networks
 #-------------------------------------------------------------------------------------
 
-# TODO: There is no "docker compose network ls" to limit to networks related to a project.
+# TODO: There is no "docker-compose network ls" to limit to networks related to a project.
 # We need to use the "--filter" parameter of "docker network ls" to accomplish this.
 # See: https://docs.docker.com/engine/reference/commandline/network_ls/#filtering
 networks-list()
@@ -656,8 +882,9 @@ fi
 
 confirm-or-exit()
 {
+	declare -r prompt=$1
 	while true; do
-        read -rp "$1" yn
+        read -rp "$prompt (No/Yes) " yn
         case $yn in
             [Yy]es ) break;;
             * ) echo "Aborting, no changes made"; exit 1;;
@@ -667,14 +894,17 @@ confirm-or-exit()
 
 query()
 {
-	# Pass query string, accept, reject strings. Return boolean
-	# Default the accept reject strings?
-	echo Not yet implemented
+	declare -r prompt=$1
+	declare resultVariable=$2
+	echo -n "$prompt and press [ENTER]: "
+	read response
+    eval $resultVariable="'$response'"
 }
 
 test()
 {
-	confirm-or-exit "WARNING - this action will destroy data stores. Do you wish to continue? (No/Yes) "
+	query "Please enter your wallet address" response
+	echo $response
 }
 
 
@@ -694,6 +924,49 @@ usage()
 usage-internal()
 {
 	grep -h -E '^#- .*$$' ./easy | sort | awk 'BEGIN {FS = "#- "}; {printf "\033[36m%-30s\033[0m %s\n", $$1, $$2}'
+}
+
+
+#-------------------------------------------------------------------------------------
+# Key/Value Store
+#
+# Origin: https://helloacm.com/the-simplest-database-implementation-by-bash-programming/#:~:text=The%20BASH%20database%20provides%20four,an%20entry%20from%20the%20database
+#
+# TODO: This needs to check before appending, or will get duplicates...
+#
+# TODO: Consider replacing with this: https://github.com/reddec/bash-db/blob/master/db.sh
+#-------------------------------------------------------------------------------------
+
+DATABASE_FILE=.database
+ 
+function db_clear()
+{
+	rm -f "$DATABASE_FILE"
+}
+
+function db_dump()
+{
+	cat "$DATABASE_FILE"
+}
+ 
+function db_set()
+{
+	declare -r key=$1
+	declare -r value=$2
+	echo "$key,$value" >> "$DATABASE_FILE"
+}
+ 
+function db_get()
+{
+	declare -r key=$1
+	grep "^$key," "$DATABASE_FILE" | sed -e "s/^$key,//" | tail -n 1
+}
+ 
+# TODO: Not really remove. Would need a gc function...
+function db_remove()
+{
+	declare -r key=$1
+	db_set $key ""
 }
 
 

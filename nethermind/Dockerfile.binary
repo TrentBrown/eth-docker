@@ -4,6 +4,8 @@ FROM ghcr.io/tomwright/dasel:latest as dasel
 
 FROM nethermind/nethermind:${DOCKER_TAG}
 
+LABEL com.docker.compose.project=eth-docker
+
 # Unused, this is here to avoid build time complaints
 ARG BUILD_TARGET
 

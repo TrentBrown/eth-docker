@@ -1,5 +1,7 @@
 FROM grafana/grafana:latest
 
+LABEL com.docker.compose.project=eth-docker
+
 USER root
 RUN apk --update add wget tree jq sed
 

@@ -14,6 +14,8 @@ RUN bash -c "git clone https://github.com/prysmaticlabs/prysm.git && cd prysm &&
 # Pull all binaries into a second stage deploy debian container
 FROM debian:bullseye-slim as consensus
 
+LABEL com.docker.compose.project=eth-docker
+
 ARG USER=prysmconsensus
 ARG UID=10002
 
@@ -53,6 +55,8 @@ USER ${USER}
 ENTRYPOINT ["beacon-chain"]
 
 FROM consensus as validator
+
+LABEL com.docker.compose.project=eth-docker
 
 ARG USER=prysmvalidator
 ARG UID=10000

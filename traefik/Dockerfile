@@ -2,6 +2,8 @@
 
 FROM traefik:latest
 
+LABEL com.docker.compose.project=eth-docker
+
 RUN apk add --no-cache \
         python3 \
         py3-pip \

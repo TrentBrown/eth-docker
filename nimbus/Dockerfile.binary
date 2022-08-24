@@ -2,6 +2,8 @@ ARG DOCKER_TAG
 
 FROM statusim/nimbus-eth2:${DOCKER_TAG}
 
+LABEL com.docker.compose.project=eth-docker
+
 # Included here to avoid build-time complaints
 ARG BUILD_TARGET
 

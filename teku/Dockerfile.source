@@ -14,6 +14,8 @@ RUN bash -c "git clone https://github.com/ConsenSys/teku.git && cd teku && git c
 # Pull all binaries into a second stage deploy Ubuntu container
 FROM eclipse-temurin:17-focal
 
+LABEL com.docker.compose.project=eth-docker
+
 ARG USER=teku
 ARG UID=10002
 

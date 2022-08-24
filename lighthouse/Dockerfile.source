@@ -21,6 +21,8 @@ RUN bash -c "git clone https://github.com/sigp/lighthouse.git && cd lighthouse &
 # mallinfo2 is useful for memory troubleshooting but requires glibc 2.33. Debian Bullseye ships with 2.31
 FROM ubuntu:jammy
 
+LABEL com.docker.compose.project=eth-docker
+
 # Unused, this is here to avoid build time complaints
 ARG DOCKER_TAG
 
