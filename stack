@@ -56,10 +56,23 @@ set -uo pipefail  # For release
 # to delete your beacon chain data? Don't say I didn't warn you."
 
 
+
+
+#-------------------------------------------------------------------------------------
+# Web Pages
+#-------------------------------------------------------------------------------------
+
 ## Open documentation
 open-docs()
 {
     open https://eth-docker.net/docs/Usage/ClientSetup
+}
+
+## Open beaconcha.in page on our validator
+PUBLIC_KEY=800008215f7de68bf2804079aa778d0034a95bbe83d5662ef174db3d9343e3ead6f48f53890e225cc834972e5e04ef6a
+open-beaconchain()
+{
+    open https://beaconcha.in/validator/${PUBLIC_KEY}
 }
 
 
@@ -180,14 +193,14 @@ docker-sudo-hack()
 
 group-exists()
 {
-	local name=$1
+	declare -r name=$1
 	getent group $name &> /dev/null
 }
 
 user-is-in-group()
 {
-	local userName=$2
-	local groupName=$1
+	declare -r userName=$2
+	declare -r groupName=$1
 	getent group $userName | grep $groupName &> /dev/null
 }
 
@@ -203,27 +216,27 @@ homebrew-is-installed()
 
 homebrew-package-is-installed()
 {
-	local name=$1
+	declare -r name=$1
     brew list $name &>/dev/null
 }
 
 homebrew-package-install()
 {
-	local name=$1
+	declare -r name=$1
 	echo Installing $name
 	brew install $name
 }
 
 homebrew-package-remove()
 {
-	local name=$1
+	declare -r name=$1
 	echo Removing $name
 	brew uninstall $name
 }
 
 homebrew-package-check-install()
 {
-	local name=$1
+	declare -r name=$1
     if homebrew-package-is-installed $name; then
         echo $1 package is already installed
     else
@@ -233,7 +246,7 @@ homebrew-package-check-install()
 
 homebrew-package-check-remove()
 {
-	local name=$1
+	declare -r name=$1
     if homebrew-package-is-installed $name; then
 		homebrew-package-remove $name
     else
@@ -277,27 +290,27 @@ tools-clear-clear-linux()
 
 swupd-package-is-installed()
 {
-	local name=$1
+	declare -r name=$1
 	sudo swupd bundle-info $name | grep "Explicitly installed" > /dev/null
 }
 
 swupd-package-install()
 {
-	local name=$1
+	declare -r name=$1
     echo Installing $name
 	sudo swupd bundle-add $name
 }
 
 swupd-package-remove()
 {
-	local name=$1
+	declare -r name=$1
     echo Removing $name
 	sudo swupd bundle-remove $name
 }
 
 swupd-package-check-install()
 {
-	local name=$1
+	declare -r name=$1
     if swupd-package-is-installed $name; then
         echo $name package is already installed
     else
@@ -307,7 +320,7 @@ swupd-package-check-install()
 
 swupd-package-check-remove()
 {
-	local name=$1
+	declare -r name=$1
     if swupd-package-is-installed $name; then
 		swupd-package-remove $name
     else
@@ -394,7 +407,6 @@ git-has-uncommitted-changes()
 #-------------------------------------------------------------------------------------
 # Keys
 #-------------------------------------------------------------------------------------
-
 
 keys-build()
 {
@@ -623,11 +635,11 @@ tmux-session-list()
 tmux-console-build()
 {
 	# Create the console session
-	local session=console
+	declare -r session=console
 	tmux new-session -d -s $session
 
 	# Build a dashboard in the first window
-	local consoleWindow=0
+	declare -r consoleWindow=0
 	tmux rename-window -t $session:$consoleWindow 'Dashboard'
 	tmux send-keys -t $session:$consoleWindow 'htop' C-m
 
@@ -642,7 +654,7 @@ tmux-console-build()
 	# tmux split-window -v
 
 	# tmux split-window -t $session:$consoleWindow -v -p 50
-	# local bottomPane = $TMUX_PANE
+	# declare -r bottomPane = $TMUX_PANE
 
 	# tmux split-window -t $bottomPane -v -p 50 
 
@@ -654,7 +666,7 @@ tmux-console-build()
 	# tmux split-window -v -p 50 './easy logs-validator'
 
 	# Put a shell into the second window
-	# local shellWindow=1
+	# declare -r shellWindow=1
 	# tmux new-window -t $session:$shellWindow -n 'Shell'
 	# tmux send-keys -t $session:$shellWindow 'zsh' C-m 'clear' C-m
 
@@ -664,6 +676,8 @@ tmux-console-build()
 
 tmux-console-clean()
 {
+	# TODO: Have to test whether already running so we don't abort
+	
 	# confirm-or-exit "Are you sure you want to kill the tmux logs session?"
 	tmux kill-session -t console
 }
@@ -677,6 +691,12 @@ tmux-console-rebuild()
 tmux-console-attach()
 {
 	tmux attach-session -t console
+}
+
+tmux-console-rebuild-attach()
+{
+	tmux-console-rebuild
+	tmux-console-attach
 }
 
 
@@ -862,7 +882,7 @@ fi
 
 confirm-or-exit()
 {
-	local prompt=$1
+	declare -r prompt=$1
 	while true; do
         read -rp "$prompt (No/Yes) " yn
         case $yn in
@@ -874,8 +894,8 @@ confirm-or-exit()
 
 query()
 {
-	local prompt=$1
-	local resultVariable=$2
+	declare -r prompt=$1
+	declare resultVariable=$2
 	echo -n "$prompt and press [ENTER]: "
 	read response
     eval $resultVariable="'$response'"
@@ -904,6 +924,49 @@ usage()
 usage-internal()
 {
 	grep -h -E '^#- .*$$' ./easy | sort | awk 'BEGIN {FS = "#- "}; {printf "\033[36m%-30s\033[0m %s\n", $$1, $$2}'
+}
+
+
+#-------------------------------------------------------------------------------------
+# Key/Value Store
+#
+# Origin: https://helloacm.com/the-simplest-database-implementation-by-bash-programming/#:~:text=The%20BASH%20database%20provides%20four,an%20entry%20from%20the%20database
+#
+# TODO: This needs to check before appending, or will get duplicates...
+#
+# TODO: Consider replacing with this: https://github.com/reddec/bash-db/blob/master/db.sh
+#-------------------------------------------------------------------------------------
+
+DATABASE_FILE=.database
+ 
+function db_clear()
+{
+	rm -f "$DATABASE_FILE"
+}
+
+function db_dump()
+{
+	cat "$DATABASE_FILE"
+}
+ 
+function db_set()
+{
+	declare -r key=$1
+	declare -r value=$2
+	echo "$key,$value" >> "$DATABASE_FILE"
+}
+ 
+function db_get()
+{
+	declare -r key=$1
+	grep "^$key," "$DATABASE_FILE" | sed -e "s/^$key,//" | tail -n 1
+}
+ 
+# TODO: Not really remove. Would need a gc function...
+function db_remove()
+{
+	declare -r key=$1
+	db_set $key ""
 }
 
 
