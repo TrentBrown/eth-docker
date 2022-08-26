@@ -1,4 +1,20 @@
-#!/bin/bash
+#!/bin/zsh
+
+# TODO: After switching to xonsh, consider collapsing each of the sections below
+# down to single commands, like "clean" "build" and "list" 
+# So:# 
+#		stax config build 
+#		stax volumes list
+#		stax images clean
+#		stax clients switch --gui --from-execution=geth --to-execution=besu
+#
+# I like the allusion to the use of xonsh 
+
+# TODO: Consider making stax its own project/repo and have it wrap around eth-docker
+# Then don't have to ask permission. Can ask to be made part of the project, tho.
+# Wrinkle is that I need the labels added to the images that eth-docker builds,
+# and merging stax into the project would be an opportunity to force that.
+
 
 # set -euxo pipefail  # For debugging this script
 set -uo pipefail  # For release
@@ -6,7 +22,7 @@ set -uo pipefail  # For release
 # Reasoning: Accepting that it's a Really Bad Idea (Trump-case used for emphasis) to 
 # create any kind of backup or kkk of a validator for the sake of being able to 
 # bring up a stack when one dies (because slashing), We've created tools that try to
-# make it exceedingly easy and safe to replace an existing server with a new one.
+# make it exceedingly easy and safe to replace an existing server with a new one, or to switch clients.
 # At no time will there be two instances of a stack. If you want to switch components,
 # you tear down the old one and build the new one, keeping any portable data (ie. the chain db).
 # We want this to be
@@ -56,6 +72,11 @@ set -uo pipefail  # For release
 # to delete your beacon chain data? Don't say I didn't warn you."
 
 
+readonly STATE_START=0
+readonly STATE_TOOLS_BUILDING=1
+readonly STATE_TOOLS_LEVEL=2
+readonly STATE_CONFIG_BUILDING=3
+readonly STATE_CONFIG_LEVEL=4
 
 
 #-------------------------------------------------------------------------------------
@@ -168,6 +189,10 @@ tools-build-mac()
     # Install newt
     # See: https://pagure.io/newt
     homebrew-package-check-install newt
+
+    # Install newt
+    # See: https://pagure.io/newt
+    homebrew-package-check-install gh
 }
 
 docker-sudo-hack()
@@ -373,14 +398,82 @@ config-build()
 
 config-clean()
 {
+	SHORT=f
+	LONG=force
+	OPTS=$(getopt -a -n weather --options $SHORT --longoptions $LONG -- "$@")
 	confirm-or-exit "Are you sure you want to delete all \".env*\" files?"
 	rm -f .env*
 }
 
 config-rebuild()
 {
+
 	config-clean
 	config-build
+}
+
+testing()
+{
+	declare -A params
+	# params-parse --force default --no-cache default
+	params-parse --params params --force passed --no-cache passed
+}
+
+# params-parse()
+# {
+# 	declare -A params
+
+# 	while [[ $# > 0 ]] do
+# 		declare flag=$1
+# 		declare value=''
+# 		case $flag in
+# 			--params)
+# 				shift
+# 				value=$1
+# 				params=$value
+# 				;;
+# 			-f|--force)
+# 				params[force]=override
+# 				;;
+# 			-n|--no-cache)
+# 				params[cache]=override
+# 				;;
+# 		esac
+# 		shift
+# 	done
+
+# 	echo $params[force]
+# 	echo $params[cache]
+# }
+
+declare -A params
+
+outside()
+{
+	params[xxx]=default
+	inside --params params --xxx outside
+}
+
+inside()
+{
+
+	params[xxx]=top
+
+	while [[ $# > 0 ]] do
+		declare flag=$1
+		case $flag in
+			--xxx)
+				echo params in case: $params[xxx]
+				;;
+			--params)
+				shift
+				params=$1
+				;;
+		esac
+		shift
+	done
+
+	echo params: $params[xxx]
 }
 
 config-show()
@@ -751,6 +844,12 @@ networks-prune()
 
 #-------------------------------------------------------------------------------------
 # Deployment
+#
+# TODO: After switching to xonsh, consider collapsing these down into a single 
+# command with parameters. Something like:
+#     build-from-layer scratch
+#     clean-to-layer config
+#     rebuild-from-layer config
 #-------------------------------------------------------------------------------------
 
 build-from-scratch()
@@ -851,6 +950,22 @@ rebuild-from-containers()
 {
 	clean-to-containers
 	build-from-containers
+}
+
+
+#-------------------------------------------------------------------------------------
+# Switching Clients
+#
+# Guide for switching: https://clientdiversity.org/#switch
+#-------------------------------------------------------------------------------------
+
+switch-clients()
+{
+	# TODO: Replace positional args with flags !!!   --from --to
+	# TODO: Do consider using console-based GUI for this workflow, or having the
+	# use of one be a command-line option: --gui
+	declare -r from = $1
+	declare -r to = $2
 }
 
 
