@@ -75,6 +75,11 @@ open-beaconchain()
     open https://beaconcha.in/validator/${PUBLIC_KEY}
 }
 
+open-github()
+{
+	open https://github.com/TrentBrown/eth-docker
+}
+
 
 #-------------------------------------------------------------------------------------
 # Shortcuts
