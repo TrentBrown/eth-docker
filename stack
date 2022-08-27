@@ -15,6 +15,37 @@
 # Wrinkle is that I need the labels added to the images that eth-docker builds,
 # and merging stax into the project would be an opportunity to force that.
 
+# TODO: Add to opnionatedness: Terminal-first. Because no server and it just works.
+# TODO: Parameterize the tmux configurations. Put into subfolder with defaults,
+# add encourage others to contribute. Make it modular by having there be contributed
+# stax commands, too.
+
+# TODO: Have the main stax page include an interactive pane in which you run a change
+# so that prompts and warnings can appear there. Let that also have a gui mode.
+# When the pane is quiescent, have it display a prompt for running. Cue up command with
+# all but the <return> at the end? Or, if in gui mode, return it to the starting page?
+
+# TODO: Have varieties of tmux layouts in subfolders by screen size. Maybe even automate
+# the choice to make tmux "responsive". Coolio. Have a way to simulate screen sizes for
+# testing.
+
+# TODO: Have a panel that shows the state of the key installation. Shows the presence
+# of the private key and maybe shows whether it's on a USB flash drive. Red text on the
+# summary page !!!
+
+# TODO: Add a layer for key installation
+
+# TODO: Add a layer for being fully up
+
+# TODO: Add a layer or something else for the slashing database
+
+# TODO: For each page, have a "getting started" panel at the top which suggests that you
+# remove it in the config, once you get it.
+
+# TODO: In introductory text, apologize for user having to learn to navigate in tmux.
+
+# TODO: Consider factoring out the code that manages tmux panels, plugins, contributions
+# and responsiveness into a parent project.
 
 # set -euxo pipefail  # For debugging this script
 set -uo pipefail  # For release
@@ -71,12 +102,22 @@ set -uo pipefail  # For release
 # want to delete your beacon chain data? It can take weeks to restore it". " Last chance. Are you really, REALLY sure you want
 # to delete your beacon chain data? Don't say I didn't warn you."
 
+# TODO: Add rehearal of an OS reboot? Keep a flag around to pick up workflow after?
+
 
 readonly STATE_START=0
 readonly STATE_TOOLS_BUILDING=1
 readonly STATE_TOOLS_LEVEL=2
 readonly STATE_CONFIG_BUILDING=3
 readonly STATE_CONFIG_LEVEL=4
+
+
+#
+
+get-fake-eth()
+{
+	open "https://goerli-faucet.com/"
+}
 
 
 #-------------------------------------------------------------------------------------
@@ -198,6 +239,16 @@ tools-build-mac()
     # Install newt
     # See: https://pagure.io/newt
     homebrew-package-check-install gh
+
+	# Experimental -----------------
+
+    # Install neofetch
+    # See: https://github.com/dylanaraps/neofetch
+    homebrew-package-check-install neofetch
+
+    # Install duf
+    # See: https://github.com/muesli/duf
+    homebrew-package-check-install duf
 }
 
 docker-sudo-hack()
@@ -299,12 +350,32 @@ tools-build-clear-linux()
 	swupd-package-check-install docker-compose
 	swupd-package-check-install devpkg-newt
 	swupd-package-check-install gh
+	swupd-package-check-install go-basic  # Needed to build "duf"
 
 	sudo systemctl enable docker
 	sudo systemctl start docker
 
 	# TODO: Need to change storage driver for prod?
 	# See: https://docs.01.org/clearlinux/latest/tutorials/docker.html
+
+	# Experimental -----------------
+
+	mkdir ~/experimental
+
+	# neofetch
+	mkdir ~/experimental/neofetch
+	cd ~/experimental/neofetch
+	wget https://github.com/dylanaraps/neofetch/archive/refs/tags/7.1.0.zip
+	unzip 7.1.0.zip
+	cd neofetch-7.1.0
+	make install
+
+	# duf
+	mkdir ~/experimental/duf
+	cd ~/experimental
+	git clone https://github.com/muesli/duf.git
+	cd duf
+	go build
 }
 
 # TODO: Add support for "gh auth login"
@@ -316,6 +387,8 @@ tools-build-clear-linux()
 tools-clear-clear-linux()
 {
 	echo TBD
+
+
 }
 
 swupd-package-is-installed()
@@ -367,6 +440,10 @@ tools-clean-mac()
     homebrew-package-check-remove newt
     homebrew-package-check-remove coreutils
     # TODO: Decide whether we really do want to remove Homebrew and Xcode completely. Or the others, for that matter
+
+	# Experimental -----------------
+    homebrew-package-check-remove duf
+    homebrew-package-check-remove neofetch
 }
 
 #- Uninstall Windows dev env
@@ -378,7 +455,11 @@ tools-clean-win()
 #- Uninstall Clear Linux dev environment
 tools-clean-clear-linux()
 {
-	echo Not yet implemented. Volunteers?
+	# TODO: Complete this
+
+	# Neofetch
+	cd ~/experimental/neofetch
+	make uninstall
 }
 
 
