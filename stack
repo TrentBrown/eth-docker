@@ -1,5 +1,8 @@
 #!/bin/zsh
 
+# TODO: See if installling https://flatpak.org/setup/Clear%20Linux will make
+# installation of other packges easier !!!
+
 # TODO: After switching to xonsh, consider collapsing each of the sections below
 # down to single commands, like "clean" "build" and "list" 
 # So:# 
@@ -70,6 +73,9 @@ set -uo pipefail  # For release
 # beacon chain data. "You're using the 'force' param, but this is too important not to ask: Are you SURE you 
 # want to delete your beacon chain data? It can take weeks to restore it". " Last chance. Are you really, REALLY sure you want
 # to delete your beacon chain data? Don't say I didn't warn you."
+
+# TODO: Conside using https://github.com/sindresorhus/speed-test instead of speedtest-cli because it's more GUI-like
+# Requires npm, tho...
 
 
 readonly STATE_START=0
@@ -193,6 +199,26 @@ tools-build-mac()
     # Install newt
     # See: https://pagure.io/newt
     homebrew-package-check-install gh
+
+    # Install glances
+    # See: https://nicolargo.github.io/glances/
+    homebrew-package-check-install glances
+
+    # Install ctop
+    # See: https://github.com/bcicen/ctop
+    homebrew-package-check-install glances
+
+    # Install speedtest-cli
+    # See: https://github.com/sivel/speedtest-cli
+    homebrew-package-check-install speedtest-cli
+
+    # Install cointop
+    # See: https://github.com/cointop-sh/cointop
+    homebrew-package-check-install cointop
+
+    # Install bat
+    # See: https://github.com/sharkdp/bat
+    homebrew-package-check-install cointop
 }
 
 docker-sudo-hack()
@@ -294,9 +320,26 @@ tools-build-clear-linux()
 	swupd-package-check-install docker-compose
 	swupd-package-check-install devpkg-newt
 	swupd-package-check-install gh
+	swupd-package-check-install flatpack
+
+	sudo pip install glances
+	sudo pip install speedtest-cli
+
+	cargo install --locked bat
+
+	# cointop
+	# https://docs.cointop.sh/install/
+	# sudo flatpak remote-add --if-not-exists flathub https://flathub.org/repo/flathub.flatpakrepo
+	# sudo flatpak install flathub com.github.miguelmota.Cointop
+	# flatpak run com.github.miguelmota.Cointop
+	# Easier!!!  docker run -v ~/.cache/cointop:/root/.config/cointop -it cointop/cointop
 
 	sudo systemctl enable docker
 	sudo systemctl start docker
+
+	# TODO: Move this to a third-party packages folder somewhere
+	sudo wget https://github.com/bcicen/ctop/releases/download/v0.7.7/ctop-0.7.7-linux-amd64 -O /usr/local/bin/ctop
+	sudo chmod +x /usr/local/bin/ctop
 
 	# TODO: Need to change storage driver for prod?
 	# See: https://docs.01.org/clearlinux/latest/tutorials/docker.html
@@ -359,6 +402,7 @@ tools-clean-mac()
 	# TODO: Check flag for expunging. Default should be *not* to expunge, because folks may already have
 	# these tools and may have dependencies on them
 
+    homebrew-package-check-remove glances
     homebrew-package-check-remove newt
     homebrew-package-check-remove coreutils
     # TODO: Decide whether we really do want to remove Homebrew and Xcode completely. Or the others, for that matter
